@@ -33,7 +33,10 @@ import {
   X,
   Brain,
   Globe,
-  Square
+  Square,
+  Plus,
+  List,
+  BarChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Editor from '@monaco-editor/react';
@@ -187,18 +190,25 @@ const parseFullText = (text: string, previousFiles: FileNode[]) => {
    return { actions, message, files };
 }
 
+const AVAILABLE_MODELS = [
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
+  { id: 'anthropic/claude-3.7-sonnet', name: 'Claude 3.7 Sonnet' },
+  { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B' },
+  { id: 'nousresearch/hermes-3-llama-3.1-405b:free', name: 'Hermes Agent' },
+  { id: 'qwen/qwen3-coder:free', name: 'Qwen 3 Coder' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3' },
+  { id: 'openrouter/free', name: 'Auto (Free)' },
+];
+
 export default function BuilderApp() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: 'Hello! What kind of React Vite app would you like to build today?',
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('code');
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash');
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('localhost:5173');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -393,6 +403,91 @@ export default function BuilderApp() {
     return 'typescript'; // default for ts, tsx
   };
 
+  if (messages.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] w-full bg-[#0a0a0a] font-sans px-4">
+        <h1 className="text-3xl font-medium text-white mb-8 tracking-tight">What do you want to create?</h1>
+        <div className="w-full max-w-3xl flex flex-col items-center">
+           <div className="w-full bg-[#111113] border border-zinc-800 rounded-xl focus-within:border-zinc-700 transition-colors shadow-2xl relative">
+              <textarea
+                 value={input}
+                 onChange={(e) => setInput(e.target.value)}
+                 onKeyDown={(e) => {
+                   if (e.key === 'Enter' && !e.shiftKey) {
+                     e.preventDefault();
+                     handleSend();
+                   }
+                 }}
+                 autoFocus
+                 placeholder="Describe your app..."
+                 className="w-full min-h-[120px] max-h-64 p-4 bg-transparent text-sm text-zinc-200 resize-none focus:outline-none placeholder:text-zinc-500 rounded-t-xl"
+              />
+              <div className="flex items-center justify-between px-4 py-3 bg-[#111113] rounded-b-xl">
+                 <div className="flex items-center space-x-3 text-zinc-400">
+                    <button className="hover:text-zinc-200 transition-colors">
+                       <Plus className="w-5 h-5" />
+                    </button>
+                    <div className="relative">
+                       <div 
+                           onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                           className="flex items-center space-x-1 hover:text-zinc-200 cursor-pointer transition-colors text-xs font-mono bg-zinc-800/30 px-2 py-1 rounded-md"
+                       >
+                           <Sparkles className="w-3.5 h-3.5 mr-1 text-zinc-500" />
+                           {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || selectedModel}
+                           <ChevronDown className="w-3 h-3 ml-1" />
+                       </div>
+                       {isModelDropdownOpen && (
+                         <div className="absolute top-full left-0 mt-2 w-48 bg-[#111113] border border-zinc-800 rounded-lg shadow-xl z-50 py-1 flex flex-col">
+                           {AVAILABLE_MODELS.map(m => (
+                             <button
+                               key={m.id}
+                               onClick={() => {
+                                 setSelectedModel(m.id);
+                                 setIsModelDropdownOpen(false);
+                               }}
+                               className={`text-left px-3 py-2 text-xs hover:bg-[#1e1e20] transition-colors ${selectedModel === m.id ? 'text-white bg-[#1e1e20]' : 'text-zinc-400'}`}
+                             >
+                               {m.name}
+                             </button>
+                           ))}
+                         </div>
+                       )}
+                    </div>
+                 </div>
+                 <div className="flex items-center space-x-3">
+                    <button
+                       onClick={handleSend}
+                       disabled={!input.trim() || isGenerating}
+                       className="flex items-center justify-center w-8 h-8 bg-zinc-200 text-black rounded-lg disabled:opacity-50 hover:bg-white transition-colors"
+                    >
+                       <ArrowUp className="w-4 h-4" />
+                    </button>
+                 </div>
+              </div>
+           </div>
+
+           <div className="mt-8 flex flex-wrap justify-center gap-2">
+              {[
+                { icon: <Layout className="w-3.5 h-3.5" />, text: "A landing page" },
+                { icon: <List className="w-3.5 h-3.5" />, text: "A todo app" },
+                { icon: <BarChart className="w-3.5 h-3.5" />, text: "A dashboard" },
+                { icon: <MessageSquare className="w-3.5 h-3.5" />, text: "A chat app" },
+              ].map((s, i) => (
+                 <button
+                    key={i}
+                    onClick={() => { setInput(s.text); }}
+                    className="flex items-center space-x-2 px-3 py-1.5 text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 rounded-full hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+                 >
+                    {s.icon}
+                    <span>{s.text}</span>
+                 </button>
+              ))}
+           </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-full bg-[#0a0a0a] text-zinc-300 font-sans overflow-hidden">
       {/* Left Sidebar - Chat & Context */}
@@ -564,7 +659,31 @@ export default function BuilderApp() {
               <Sparkles className="w-3.5 h-3.5" />
               <span className="drop-shadow-md">{input.trim().startsWith('/') ? 'Commands' : 'Suggestions'}</span>
               <span className="flex-1"></span>
-              <span className="text-zinc-500 font-mono text-[10px] drop-shadow-md">{selectedModel}</span>
+              <div className="relative">
+                 <div 
+                     onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                     className="flex items-center space-x-1 hover:text-zinc-200 cursor-pointer transition-colors text-[10px] font-mono text-zinc-500 drop-shadow-md"
+                 >
+                     {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || selectedModel}
+                     <ChevronDown className="w-3 h-3 ml-1" />
+                 </div>
+                 {isModelDropdownOpen && (
+                   <div className="absolute bottom-full right-0 mb-2 w-48 bg-[#111113] border border-zinc-800 rounded-lg shadow-xl z-50 py-1 flex flex-col">
+                     {AVAILABLE_MODELS.map(m => (
+                       <button
+                         key={m.id}
+                         onClick={() => {
+                           setSelectedModel(m.id);
+                           setIsModelDropdownOpen(false);
+                         }}
+                         className={`text-left px-3 py-2 text-xs hover:bg-[#1e1e20] transition-colors ${selectedModel === m.id ? 'text-white bg-[#1e1e20]' : 'text-zinc-400'}`}
+                       >
+                         {m.name}
+                       </button>
+                     ))}
+                   </div>
+                 )}
+              </div>
             </div>
           
           {input.trim().startsWith('/') ? (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Nodebox } from '@codesandbox/nodebox';
+import { WebContainer } from '@webcontainer/api';
 import { Monitor, Play, Terminal } from 'lucide-react';
 import { Terminal as Xterm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -15,19 +15,37 @@ interface PreviewProps {
   onUrlChange?: (url: string) => void;
 }
 
-// Keep global references to persist Nodebox across renders
-let nodeboxInstance: Nodebox | null = null;
-let nodeboxIframe: HTMLIFrameElement | null = null;
-let bootingPromise: Promise<void> | null = null;
+// Keep global references to persist WebContainer across renders
+let webcontainerInstance: WebContainer | null = null;
+let bootingPromise: Promise<WebContainer> | null = null;
 let isDevServerRunning = false;
 let currentAppUrl: string | null = null;
 let activeProcessObj: any = null;
-let isFirstInitDev = true;
 let previousFilesContent: Record<string, string> = {};
+
+function buildFileSystemTree(files: FileNode[]) {
+  const tree: Record<string, any> = {};
+  for (const file of files) {
+    const parts = file.path.replace(/^\//, '').split('/');
+    const fileName = parts.pop()!;
+    let current = tree;
+    for (const part of parts) {
+      if (!current[part]) {
+        current[part] = { directory: {} };
+      }
+      if (!current[part].directory) {
+          current[part].directory = {};
+      }
+      current = current[part].directory;
+    }
+    current[fileName] = { file: { contents: file.content } };
+  }
+  return tree;
+}
 
 export function Preview({ files, onUrlChange }: PreviewProps) {
   const [url, setUrl] = useState<string | null>(currentAppUrl);
-  const [status, setStatus] = useState<'idle' | 'booting' | 'mounting' | 'starting' | 'ready' | 'error'>(currentAppUrl ? 'ready' : 'idle');
+  const [status, setStatus] = useState<'idle' | 'booting' | 'mounting' | 'installing' | 'starting' | 'ready' | 'error'>(currentAppUrl ? 'ready' : 'idle');
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   
   const [debouncedFiles, setDebouncedFiles] = useState(files);
@@ -68,7 +86,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
       window.addEventListener('resize', () => fitAddon.fit());
       
       // Write initial status
-      xterm.write(`\x1b[1;34mℹ\x1b[0m Starting Nodebox environment...\r\n`);
+      xterm.write(`\x1b[1;34mℹ\x1b[0m Starting WebContainer environment...\r\n`);
     }
   }, [status]);
 
@@ -79,22 +97,20 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
       if (debouncedFiles.length === 0) return;
 
       try {
-        if (!nodeboxIframe) {
-           nodeboxIframe = document.createElement('iframe');
-           nodeboxIframe.style.display = 'none';
-           document.body.appendChild(nodeboxIframe);
-        }
-
-        if (!nodeboxInstance) {
+        if (!webcontainerInstance) {
           setStatus('booting');
-          nodeboxInstance = new Nodebox({
-            iframe: nodeboxIframe
-          });
-          
           if (!bootingPromise) {
-             bootingPromise = nodeboxInstance.connect();
+             bootingPromise = WebContainer.boot();
           }
-          await bootingPromise;
+          webcontainerInstance = await bootingPromise;
+          
+          webcontainerInstance.on('server-ready', (port, url) => {
+            currentAppUrl = url;
+            if (mounted) {
+              setUrl(url);
+              setStatus('ready');
+            }
+          });
         }
 
         if (!mounted) return;
@@ -112,15 +128,20 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
           if (xtermRef.current) {
              xtermRef.current.write('\x1b[36mSyncing files...\x1b[0m\r\n');
           }
-          await nodeboxInstance.fs.init(filesMap);
+          const tree = buildFileSystemTree(debouncedFiles);
+          await webcontainerInstance.mount(tree);
           previousFilesContent = filesMap;
         } else {
           // Write only changed files
           for (const [path, content] of Object.entries(filesMap)) {
              if (previousFilesContent[path] !== content) {
-                // Nodebox expects intermediate directories to exist sometimes, but vite/nodebox handles it gracefully
                 try {
-                  await nodeboxInstance.fs.writeFile(path, content);
+                  const parts = path.split('/');
+                  const fileName = parts.pop()!;
+                  if (parts.length > 0) {
+                     await webcontainerInstance.fs.mkdir(parts.join('/'), { recursive: true });
+                  }
+                  await webcontainerInstance.fs.writeFile(path, content);
                 } catch(e) {
                    // Ignore write failures gracefully
                 }
@@ -132,7 +153,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
           for (const path of Object.keys(previousFilesContent)) {
              if (!(path in filesMap)) {
                 try {
-                   await nodeboxInstance.fs.rm(path);
+                   await webcontainerInstance.fs.rm(path);
                 } catch(e) {}
                 delete previousFilesContent[path];
              }
@@ -150,31 +171,29 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
           isDevServerRunning = true;
           if (!mounted) return;
           
+          // Install dependencies
+          setStatus('installing');
+          if (xtermRef.current) xtermRef.current.write('\r\n\x1b[1;33m▶\x1b[0m npm install\r\n');
+          
+          const installProcess = await webcontainerInstance.spawn('npm', ['install']);
+          installProcess.output.pipeTo(new WritableStream({
+            write(data) { handleLog(data); }
+          }));
+          
+          const installExitCode = await installProcess.exit;
+          if (installExitCode !== 0) {
+             throw new Error('Installation failed');
+          }
+
+          if (!mounted) return;
+          
           setStatus('starting');
           if (xtermRef.current) xtermRef.current.write('\r\n\x1b[1;33m▶\x1b[0m npm run dev\r\n');
           
-          const shell = nodeboxInstance.shell.create();
-          activeProcessObj = shell;
-          
-          activeProcessObj.stdout.on('data', (data: string[]) => {
-            handleLog(data.toString().replace(/\n/g, '\r\n'));
-          });
-          
-          activeProcessObj.stderr.on('data', (data: string[]) => {
-             handleLog(data.toString().replace(/\n/g, '\r\n'));
-          });
-
-          const devProcessInfo = await activeProcessObj.runCommand('npm', ['run', 'dev']);
-          const previewInfo = await nodeboxInstance.preview.getByShellId(devProcessInfo.id);
-          
-          currentAppUrl = previewInfo.url;
-          if (mounted) {
-            setUrl(currentAppUrl);
-            setStatus('ready');
-          }
-        } else if (status !== 'ready' && currentAppUrl) {
-          setStatus('ready');
-          setUrl(currentAppUrl);
+          activeProcessObj = await webcontainerInstance.spawn('npm', ['run', 'dev']);
+          activeProcessObj.output.pipeTo(new WritableStream({
+             write(data) { handleLog(data); }
+          }));
         }
 
       } catch (err: any) {
@@ -227,7 +246,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
                  <Monitor className="w-4 h-4 text-zinc-400" />
                </div>
                <div>
-                  <div className="text-sm font-medium text-zinc-200">Nodebox Sandbox</div>
+                  <div className="text-sm font-medium text-zinc-200">WebContainer Sandbox</div>
                   <div className="text-xs text-zinc-500 capitalize">{status}...</div>
                </div>
              </div>
