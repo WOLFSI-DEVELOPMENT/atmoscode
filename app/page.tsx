@@ -549,6 +549,18 @@ export default function BuilderApp() {
                   >
                     Gemini 3.1 Flash Lite
                   </button>
+                  <button
+                    onClick={() => { setSelectedModel('anthropic/claude-3.7-sonnet'); setInput(''); }}
+                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'anthropic/claude-3.7-sonnet' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                  >
+                    Claude 3.7 Sonnet
+                  </button>
+                  <button
+                    onClick={() => { setSelectedModel('meta-llama/llama-3.1-70b-instruct'); setInput(''); }}
+                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'meta-llama/llama-3.1-70b-instruct' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                  >
+                    Llama 3.1 70B
+                  </button>
                 </>
               )}
               {'/skills'.startsWith(input.toLowerCase()) && (
