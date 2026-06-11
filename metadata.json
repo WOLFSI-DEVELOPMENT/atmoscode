@@ -1,0 +1,6 @@
+{
+  "name": "AI App Builder",
+  "description": "An AI-powered app builder to generate React Vite TypeScript applications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
