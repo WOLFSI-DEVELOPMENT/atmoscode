@@ -30,13 +30,14 @@ file contents here
 </file>
 
 Strict Rules:
-1. Provide all files needed for a React Vite app. You MUST provide package.json, package-lock.json (can be minimal), vite.config.ts, index.html, src/main.tsx, and src/App.tsx.
-2. ALWAYS use Tailwind CSS and provide its configuration files (tailwind.config.js, postcss.config.js, src/index.css).
-3. ALWAYS use the hugeicons-react library for icons.
-4. Only use <command> if you need to install a library or run a build. 
-5. Make sure to use the latest, modern package versions in package.json (e.g., React 19+, Vite 6+, TypeScript 5.5+). Do not use old versions like React 18 or Vite 4.
-6. After providing and editing all files, you MUST end with <command>npm run build</command> to verify it works.
-7. Finally, provide a brief, humble conclusion message. Keep it under 3 bullet points. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any tags.`;
+1. If building from scratch, provide all files needed for a React Vite app. You MUST provide package.json, package-lock.json (can be minimal), vite.config.ts, index.html, src/main.tsx, and src/App.tsx.
+2. If making an update or fix, ONLY output the <file> blocks for files that actually require changes. Do not output unchanged files. Keep your edits surgical and smart.
+3. ALWAYS use Tailwind CSS and provide its configuration files (tailwind.config.js, postcss.config.js, src/index.css).
+4. ALWAYS use the hugeicons-react library for icons.
+5. Only use <command> if you need to install a library or run a build. 
+6. Make sure to use the latest, modern package versions in package.json (e.g., React 19+, Vite 6+, TypeScript 5.5+). Do not use old versions like React 18 or Vite 4.
+7. After providing and editing all files, you MUST end with <command>npm run build</command> to verify it works.
+8. Finally, provide a brief, humble conclusion message. Keep it under 3 bullet points. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any tags.`;
 
     const isOpenRouter = modelToUse.includes('/');
     let openai: OpenAI | null = null;

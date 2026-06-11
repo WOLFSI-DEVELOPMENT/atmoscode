@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { WebContainer } from '@webcontainer/api';
-import { Monitor, Play, Terminal } from 'lucide-react';
-import { Terminal as Xterm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import { Monitor, Play, Terminal, Loader2 } from 'lucide-react';
 
 interface FileNode {
   path: string;
@@ -49,8 +46,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
   
   const [debouncedFiles, setDebouncedFiles] = useState(files);
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<Xterm | null>(null);
+  const xtermRef = useRef<{ write: (s: string) => void }>({ write: () => {} });
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedFiles(files), 1000);
@@ -63,32 +59,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
     }
   }, [url, onUrlChange]);
 
-  // Terminal initialization
-  useEffect(() => {
-    if ((status !== 'ready' && status !== 'idle' && status !== 'error') && terminalRef.current && !xtermRef.current) {
-      const xterm = new Xterm({
-        theme: {
-          background: '#1e1e1e',
-          foreground: '#a1a1aa',
-          cursor: 'transparent',
-          selectionBackground: '#3f3f46'
-        },
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        fontSize: 12,
-        disableStdin: true
-      });
-      const fitAddon = new FitAddon();
-      xterm.loadAddon(fitAddon);
-      xterm.open(terminalRef.current);
-      fitAddon.fit();
-      xtermRef.current = xterm;
-
-      window.addEventListener('resize', () => fitAddon.fit());
-      
-      // Write initial status
-      xterm.write(`\x1b[1;34mℹ\x1b[0m Starting WebContainer environment...\r\n`);
-    }
-  }, [status]);
+  // Terminal initialization removed as per user request
 
   useEffect(() => {
     let mounted = true;
@@ -209,8 +180,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
     return () => {
       mounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedFiles]);
+  }, [debouncedFiles, files]);
 
   if (files.length === 0) {
     return (
@@ -238,26 +208,16 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
 
   if (status !== 'ready' || !url) {
     return (
-      <div className="flex-1 bg-white flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-2xl bg-[#1e1e1e] rounded-lg shadow-xl overflow-hidden border border-zinc-800">
-           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-[#18181b]">
-             <div className="flex items-center gap-3">
-               <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
-                 <Monitor className="w-4 h-4 text-zinc-400" />
-               </div>
-               <div>
-                  <div className="text-sm font-medium text-zinc-200">WebContainer Sandbox</div>
-                  <div className="text-xs text-zinc-500 capitalize">{status}...</div>
-               </div>
-             </div>
-             <div className="w-4 h-4 border-2 border-zinc-500 border-t-zinc-200 rounded-full animate-spin"></div>
-           </div>
-           
-           {/* Terminal Output Area */}
-           <div className="p-3 bg-[#1e1e1e] h-64">
-             <div ref={terminalRef} className="w-full h-full" />
-           </div>
-        </div>
+      <div className="flex-1 bg-white flex flex-col items-center justify-center p-6 text-zinc-800">
+        <Loader2 className="w-8 h-8 animate-spin mb-4 text-zinc-400" />
+        <h3 className="text-xl font-medium mb-2">Building your preview</h3>
+        <p className="text-zinc-500">
+           {status === 'booting' && 'Starting environment...'}
+           {status === 'mounting' && 'Syncing files...'}
+           {status === 'installing' && 'Installing dependencies...'}
+           {status === 'starting' && 'Starting development server...'}
+           {status === 'idle' && 'Preparing...'}
+        </p>
       </div>
     );
   }

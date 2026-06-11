@@ -220,6 +220,10 @@ export default function BuilderApp() {
     lineNumbers: true,
     stickyScroll: true,
     renderIndentGuides: true,
+    formatOnPaste: true,
+    formatOnType: true,
+    dragAndDrop: true,
+    mouseWheelZoom: true,
   });
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -420,9 +424,9 @@ export default function BuilderApp() {
                  }}
                  autoFocus
                  placeholder="Describe your app..."
-                 className="w-full min-h-[120px] max-h-64 p-4 bg-transparent text-sm text-zinc-200 resize-none focus:outline-none placeholder:text-zinc-500 rounded-t-xl"
+                 className="w-full min-h-[80px] max-h-48 p-4 bg-transparent text-sm text-zinc-200 resize-none focus:outline-none placeholder:text-zinc-500 rounded-t-xl"
               />
-              <div className="flex items-center justify-between px-4 py-3 bg-[#111113] rounded-b-xl">
+              <div className="flex items-center justify-between px-4 py-3 bg-[#111113] rounded-b-xl relative z-20">
                  <div className="flex items-center space-x-3 text-zinc-400">
                     <button className="hover:text-zinc-200 transition-colors">
                        <Plus className="w-5 h-5" />
@@ -476,7 +480,7 @@ export default function BuilderApp() {
                  <button
                     key={i}
                     onClick={() => { setInput(s.text); }}
-                    className="flex items-center space-x-2 px-3 py-1.5 text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 rounded-full hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+                    className="flex items-center space-x-2 px-4 py-2 text-xs text-zinc-400 bg-[#1e1e20] rounded-full hover:bg-[#2a2a2d] hover:text-zinc-300 transition-colors"
                  >
                     {s.icon}
                     <span>{s.text}</span>
@@ -534,7 +538,7 @@ export default function BuilderApp() {
                              <ChevronDown className="w-3.5 h-3.5 ml-2 text-zinc-500" />
                            </button>
                         ) : (
-                           <div className="border border-zinc-800/60 rounded-xl bg-transparent my-2 text-zinc-300 overflow-hidden">
+                           <div className="bg-transparent my-2 text-zinc-300">
                              <div 
                                onClick={() => {
                                  setMessages(prev => {
@@ -543,19 +547,19 @@ export default function BuilderApp() {
                                    return m;
                                  });
                                }}
-                               className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-zinc-800/30 transition-colors bg-[#1a1a1c] select-none border-b border-zinc-800/60"
+                               className="flex items-center justify-between py-2 cursor-pointer transition-colors bg-transparent select-none mb-4"
                              >
                                <div className="flex items-center space-x-3 text-sm">
                                   <Sparkles className="w-4 h-4 text-[#8ca8f9]" />
                                   <span className="text-zinc-300 font-medium">Agent Process</span>
                                </div>
-                               <div className="flex items-center space-x-1.5 text-xs text-zinc-400">
+                               <div className="flex items-center space-x-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors">
                                   <span>Hide details</span>
                                   <ChevronUp className="w-3.5 h-3.5" />
                                </div>
                              </div>
                              
-                             <div className="p-4 space-y-6">
+                             <div className="space-y-6">
                                 {processActionsIntoGroups(msg.actions).map((group: any, gIdx: number) => (
                                    <div key={gIdx} className="space-y-3">
                                       <div className="flex items-center space-x-2 text-zinc-300 text-sm font-medium">
@@ -568,13 +572,13 @@ export default function BuilderApp() {
                                       </div>
                                       
                                       {group.type === 'thought' ? (
-                                        <div className="text-zinc-500 text-xs pl-3 border-l-2 border-zinc-800/50 whitespace-pre-wrap ml-2">
+                                        <div className="text-zinc-500 text-xs pl-3 border-l-2 border-[#1e1e20] whitespace-pre-wrap ml-2">
                                            {group.items[0].content}
                                         </div>
                                       ) : group.type === 'searchGroup' ? (
                                         <div className="space-y-2">
                                            {group.items.map((item: any, iIdx: number) => (
-                                              <div key={iIdx} className="border border-zinc-800/80 rounded-lg bg-[#0e0e10] p-3 text-sm text-zinc-300">
+                                              <div key={iIdx} className="rounded-md bg-[#1e1e20] p-3 text-sm text-zinc-300">
                                                  <div className="font-mono text-xs text-zinc-400 opacity-80 mb-1">$ tool search &quot;{item.query}&quot;</div>
                                                  {item.completed ? (
                                                     <div className="text-xs text-zinc-500 whitespace-pre-wrap max-h-32 overflow-y-auto">{item.content}</div>
@@ -588,9 +592,9 @@ export default function BuilderApp() {
                                            ))}
                                         </div>
                                       ) : (
-                                        <div className="border border-zinc-800 rounded-lg bg-[#141415] overflow-hidden">
+                                        <div className="rounded-md bg-[#1e1e20] overflow-hidden">
                                            {group.items.map((item: any, iIdx: number) => (
-                                              <div key={iIdx} className={`flex items-center justify-between p-3 text-sm text-zinc-300 ${iIdx !== group.items.length - 1 ? 'border-b border-zinc-800/50' : ''}`}>
+                                              <div key={iIdx} className="flex items-center justify-between p-3 text-sm text-zinc-300">
                                                  <span className="font-mono text-xs">{item.path || item.command}</span>
                                                  {item.completed ? (
                                                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
@@ -612,7 +616,7 @@ export default function BuilderApp() {
                                 )}
                              </div>
                            </div>
-                        )}
+                         )}
                      </div>
                   )}
                   {msg.content && (
@@ -653,8 +657,9 @@ export default function BuilderApp() {
         </div>
 
         {/* Input Area */}
-        <div className="absolute bottom-0 w-full p-4 bg-transparent pt-0 z-10 pointer-events-none flex flex-col justify-end">
-          <div className="pointer-events-auto">
+        <div className="absolute bottom-0 w-full p-4 pt-12 z-10 pointer-events-none flex flex-col justify-end">
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent backdrop-blur-md [mask-image:linear-gradient(to_bottom,transparent,black_40%)] -z-10 pointer-events-none" />
+          <div className="pointer-events-auto relative">
             <div className="flex items-center space-x-1.5 text-xs text-white mb-3 px-1">
               <Sparkles className="w-3.5 h-3.5" />
               <span className="drop-shadow-md">{input.trim().startsWith('/') ? 'Commands' : 'Suggestions'}</span>
@@ -930,6 +935,10 @@ export default function BuilderApp() {
                             lineNumbers: editorSettings.lineNumbers ? 'on' : 'off',
                             stickyScroll: { enabled: editorSettings.stickyScroll },
                             guides: { indentation: editorSettings.renderIndentGuides },
+                            formatOnPaste: editorSettings.formatOnPaste,
+                            formatOnType: editorSettings.formatOnType,
+                            dragAndDrop: editorSettings.dragAndDrop,
+                            mouseWheelZoom: editorSettings.mouseWheelZoom,
                             readOnly: false,
                             fontSize: 13,
                             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
@@ -993,7 +1002,11 @@ export default function BuilderApp() {
                   { id: 'folding', title: 'Folding', desc: 'Enable folding to collapse code blocks.' },
                   { id: 'lineNumbers', title: 'Line numbers', desc: 'Render the line numbers for each line of code.' },
                   { id: 'stickyScroll', title: 'Sticky scroll', desc: 'Enable sticky scroll to show the nested code blocks.' },
-                  { id: 'renderIndentGuides', title: 'Render indentation guides', desc: 'Render indentation guides for each line of code.' }
+                  { id: 'renderIndentGuides', title: 'Render indentation guides', desc: 'Render indentation guides for each line of code.' },
+                  { id: 'formatOnPaste', title: 'Format on Paste', desc: 'Automatically format code when pasting.' },
+                  { id: 'formatOnType', title: 'Format on Type', desc: 'Automatically format code while typing.' },
+                  { id: 'dragAndDrop', title: 'Drag and Drop', desc: 'Enable drag & drop moving of selections.' },
+                  { id: 'mouseWheelZoom', title: 'Mouse Wheel Zoom', desc: 'Enable mouse wheel zoom with Ctrl/Cmd key.' }
                 ].map((setting) => (
                   <div key={setting.id} className="flex items-start justify-between space-x-3">
                     <div className="flex-1">
