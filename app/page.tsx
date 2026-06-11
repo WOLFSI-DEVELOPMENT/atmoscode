@@ -53,12 +53,13 @@ function Timer({ isRunning }: { isRunning: boolean }) {
 
 function summarizeAction(action: any) {
   if (!action) return 'Working...';
-  if (action.type === 'file') return `Editing ${action.path}`;
+  if (action.type === 'file') return `Editing ${action.path.split('/').pop()}`;
   if (action.type === 'command') {
     if (action.command?.includes('build')) return 'Compiling applet';
-    if (action.command?.includes('install')) return 'Installing packages';
-    return `Running ${action.command}`;
+    if (action.command?.includes('install')) return 'Installing dependencies';
+    return `Running command`;
   }
+  if (action.type === 'search') return `Searching ${action.query || 'web'}`;
   if (action.type === 'thought') return 'Thinking...';
   return 'Working...';
 }
@@ -73,12 +74,19 @@ function processActionsIntoGroups(actions: any[]) {
         } else {
            acc.push({ type: 'fileGroup', title: 'Editing files', items: [curr], completed: curr.completed });
         }
+     } else if (curr.type === 'search') {
+        if (last?.type === 'searchGroup') {
+           last.items.push(curr);
+           if (!curr.completed) last.completed = false;
+        } else {
+           acc.push({ type: 'searchGroup', title: 'Searching the web', items: [curr], completed: curr.completed });
+        }
      } else if (curr.type === 'thought') {
         acc.push({ type: 'thought', items: [curr], completed: curr.completed });
      } else if (curr.type === 'command') {
-        let title = 'Run command';
-        if (curr.command?.includes('install')) title = 'Install dependencies';
-        if (curr.command?.includes('build')) title = 'Compile applet';
+        let title = 'Running command';
+        if (curr.command?.includes('install')) title = 'Installing dependencies';
+        if (curr.command?.includes('build')) title = 'Compiling applet';
         acc.push({ type: 'command', title, items: [curr], completed: curr.completed });
      }
      return acc;
@@ -93,7 +101,8 @@ type FileNode = {
 export type AgentAction = 
   | { type: 'thought'; content: string; completed: boolean }
   | { type: 'file'; path: string; content: string; completed: boolean }
-  | { type: 'command'; command: string; completed: boolean };
+  | { type: 'command'; command: string; completed: boolean }
+  | { type: 'search'; query: string; content: string; completed: boolean };
 
 type Message = {
   role: 'user' | 'assistant';
@@ -112,14 +121,18 @@ const parseFullText = (text: string, previousFiles: FileNode[]) => {
    let remaining = text;
    
    while (remaining.length > 0) {
-      const tagMatch = remaining.match(/<(thought|command|file(?:\s+path="([^"]+)")?)>/);
+      const tagMatch = remaining.match(/<(thought|command|search(?:\s+query="([^"]+)")?|file(?:\s+path="([^"]+)")?)>/);
       if (!tagMatch) {
          message += remaining;
          break;
       }
       
-      const tagType = tagMatch[1].startsWith('file') ? 'file' : (tagMatch[1] as 'thought' | 'command');
-      const tagPath = tagMatch[2] || 'unknown';
+      const isFile = tagMatch[1].startsWith('file');
+      const isSearch = tagMatch[1].startsWith('search');
+      
+      const tagType = isFile ? 'file' : isSearch ? 'search' : (tagMatch[1] as 'thought' | 'command');
+      const tagPath = isFile ? tagMatch[3] : undefined;
+      const tagQuery = isSearch ? tagMatch[2] : undefined;
       
       const tagStartIdx = tagMatch.index!;
       if (tagStartIdx > 0) {
@@ -139,7 +152,8 @@ const parseFullText = (text: string, previousFiles: FileNode[]) => {
             type: tagType,
             content: tagType !== 'command' ? content : undefined,
             command: tagType === 'command' ? content : undefined,
-            path: tagType === 'file' ? tagPath : undefined,
+            path: tagPath,
+            query: tagQuery,
             completed: true
          } as any);
          remaining = remaining.slice(closeTagIdx + closeTagStr.length);
@@ -150,7 +164,8 @@ const parseFullText = (text: string, previousFiles: FileNode[]) => {
             type: tagType,
             content: tagType !== 'command' ? content : undefined,
             command: tagType === 'command' ? content : undefined,
-            path: tagType === 'file' ? tagPath : undefined,
+            path: tagPath,
+            query: tagQuery,
             completed: false
          } as any);
          remaining = ""; // Wait for more data
@@ -245,13 +260,22 @@ export default function BuilderApp() {
     ]);
 
     try {
+      const historyMsg = messages.map(m => ({
+         role: m.role,
+         contents: m.content || ''
+      }));
+      if (historyMsg.length > 0) historyMsg.pop(); // Remove the placeholder
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userPrompt, model: selectedModel }),
+        body: JSON.stringify({ prompt: userPrompt, model: selectedModel, messages: historyMsg }),
       });
 
-      if (!response.ok) throw new Error('Generation failed');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.error || 'Generation failed');
+      }
       
       const reader = response.body?.getReader();
       if (!reader) throw new Error('ReadableStream not supported');
@@ -294,12 +318,12 @@ export default function BuilderApp() {
           return newMsgs;
       });
       
-    } catch (error) {
+    } catch (error: any) {
       setMessages((prev) => {
         const newMsgs = [...prev];
         newMsgs[placeholderMsgIndex] = {
           role: 'assistant',
-          content: 'Sorry, I encountered an error while generating the code.',
+          content: `Sorry, I encountered an error while generating the code: ${error.message || 'Unknown error'}`,
         };
         return newMsgs;
       });
@@ -410,6 +434,7 @@ export default function BuilderApp() {
                                          {group.type === 'fileGroup' && <Pencil className="w-4 h-4 text-zinc-400" />}
                                          {group.type === 'command' && group.title === 'Compile applet' && <Wrench className="w-4 h-4 text-zinc-400" />}
                                          {group.type === 'command' && group.title !== 'Compile applet' && <Terminal className="w-4 h-4 text-zinc-400" />}
+                                         {group.type === 'searchGroup' && <Globe className="w-4 h-4 text-zinc-400" />}
                                          {group.type === 'thought' && <Lightbulb className="w-4 h-4 text-zinc-400" />}
                                          <span>{group.title || 'Thought process'}</span>
                                       </div>
@@ -417,6 +442,22 @@ export default function BuilderApp() {
                                       {group.type === 'thought' ? (
                                         <div className="text-zinc-500 text-xs pl-3 border-l-2 border-zinc-800/50 whitespace-pre-wrap ml-2">
                                            {group.items[0].content}
+                                        </div>
+                                      ) : group.type === 'searchGroup' ? (
+                                        <div className="space-y-2">
+                                           {group.items.map((item: any, iIdx: number) => (
+                                              <div key={iIdx} className="border border-zinc-800/80 rounded-lg bg-[#0e0e10] p-3 text-sm text-zinc-300">
+                                                 <div className="font-mono text-xs text-zinc-400 opacity-80 mb-1">$ tool search &quot;{item.query}&quot;</div>
+                                                 {item.completed ? (
+                                                    <div className="text-xs text-zinc-500 whitespace-pre-wrap max-h-32 overflow-y-auto">{item.content}</div>
+                                                 ) : (
+                                                    <div className="flex items-center space-x-2">
+                                                       <RefreshCw className="w-3 h-3 text-zinc-500 animate-spin" />
+                                                       <span className="text-xs text-zinc-500">Searching...</span>
+                                                    </div>
+                                                 )}
+                                              </div>
+                                           ))}
                                         </div>
                                       ) : (
                                         <div className="border border-zinc-800 rounded-lg bg-[#141415] overflow-hidden">

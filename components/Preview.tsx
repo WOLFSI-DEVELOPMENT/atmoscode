@@ -190,6 +190,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedFiles]);
 
   if (files.length === 0) {

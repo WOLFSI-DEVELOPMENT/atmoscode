@@ -1,14 +1,17 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { tavily } from "@tavily/core";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "tvly-DUMMYKEY" }); // Will be configured by user or mock if empty
+const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "tvly-DUMMY" });
 
 export async function POST(req: NextRequest) {
   try {
     const { prompt, model, messages } = await req.json();
-    const modelToUse = model || "gemini-3.5-flash";
+    let modelToUse = model || "gemini-2.5-flash";
+    
+    // fall back to 2.5 if 3.5 is requested and not available
+    if (modelToUse.includes('3.5')) modelToUse = 'gemini-2.5-flash';
 
     const systemInstruction = `You are an expert full-stack developer AI. 
 Provide your response using the following exactly-formatted tags. You can use them multiple times. Do NOT wrap your message in markdown code blocks.
@@ -36,13 +39,10 @@ Strict Rules:
 
     let historyFormatted: any[] = [];
     if (messages && messages.length > 0) {
-       const previousHistory = messages.slice(0, -1);
-       if (previousHistory.length > 0) {
-          historyFormatted = previousHistory.map((m: any) => ({
-             role: m.role === 'assistant' ? 'model' : 'user',
-             parts: [{ text: m.contents }]
-          }));
-       }
+       historyFormatted = messages.map((m: any) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.contents }]
+       }));
     }
 
     const chat = ai.chats.create({
@@ -54,8 +54,8 @@ Strict Rules:
                 name: 'tavilySearch',
                 description: 'Search the web using Tavily API to get real-time information or documentation.',
                 parameters: {
-                   type: 'OBJECT',
-                   properties: { query: { type: 'STRING' } },
+                   type: Type.OBJECT,
+                   properties: { query: { type: Type.STRING } },
                    required: ['query']
                 }
              }]
@@ -79,21 +79,19 @@ Strict Rules:
              
              for await (const chunk of responseStream) {
                if (chunk.text) {
-                 // Add a slight artificial delay
                  await new Promise(r => setTimeout(r, 70));
                  controller.enqueue(encoder.encode(chunk.text));
                }
                
                if (chunk.functionCalls && chunk.functionCalls.length > 0) {
                  for (const call of chunk.functionCalls) {
-                    if (call.name === 'tavilySearch') {
+                    if (call.name === 'tavilySearch' && call.args) {
                        const query = call.args.query as string;
-                       // We yield the search to the UI (Open tag)
                        controller.enqueue(encoder.encode(`\n<search query="${query}">\nSearching...\n`));
                        
                        let searchRes = "";
                        try {
-                          if (process.env.TAVILY_API_KEY) {
+                          if (process.env.TAVILY_API_KEY && process.env.TAVILY_API_KEY !== "tvly-DUMMY") {
                              const res = await tvly.search(query, { searchDepth: 'basic', maxResults: 3 });
                              searchRes = res.results.map((r: any) => `* [${r.title}](${r.url})\n${r.content}`).join('\n\n');
                           } else {
@@ -103,7 +101,6 @@ Strict Rules:
                           searchRes = "Failed to search the web.";
                        }
                        
-                       // Close tag with results
                        controller.enqueue(encoder.encode(`\n${searchRes}\n</search>\n`));
                        
                        toolCallResults.push({
@@ -122,7 +119,8 @@ Strict Rules:
                 hasMoreTurns = true;
              }
           }
-        } catch (e) {
+        } catch (e: any) {
+          controller.enqueue(encoder.encode(`\n[Error Stream Interrupted: ${e.message}]`));
           controller.error(e);
         }
         controller.close();
