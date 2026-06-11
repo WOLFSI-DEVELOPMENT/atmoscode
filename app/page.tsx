@@ -32,7 +32,8 @@ import {
   Settings,
   X,
   Brain,
-  Globe
+  Globe,
+  Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Editor from '@monaco-editor/react';
@@ -211,6 +212,23 @@ export default function BuilderApp() {
     renderIndentGuides: true,
   });
 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+  };
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
+
   const currentFiles = useMemo(() => messages[messages.length - 1]?.files || [], [messages]);
 
   const projectName = useMemo(() => {
@@ -266,10 +284,13 @@ export default function BuilderApp() {
       }));
       if (historyMsg.length > 0) historyMsg.pop(); // Remove the placeholder
 
+      abortControllerRef.current = new AbortController();
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: userPrompt, model: selectedModel, messages: historyMsg }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
@@ -319,6 +340,18 @@ export default function BuilderApp() {
       });
       
     } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setMessages((prev) => {
+          const newMsgs = [...prev];
+          newMsgs[placeholderMsgIndex] = {
+            ...newMsgs[placeholderMsgIndex],
+            isGenerating: false,
+            content: (newMsgs[placeholderMsgIndex].content || '') + '\n\n*[Generation stopped by user]*',
+          };
+          return newMsgs;
+        });
+        return;
+      }
       setMessages((prev) => {
         const newMsgs = [...prev];
         newMsgs[placeholderMsgIndex] = {
@@ -363,14 +396,14 @@ export default function BuilderApp() {
   return (
     <div className="flex h-screen w-full bg-[#0a0a0a] text-zinc-300 font-sans overflow-hidden">
       {/* Left Sidebar - Chat & Context */}
-      <div className="w-[380px] flex flex-col border-r border-zinc-800 bg-[#111113] shrink-0">
-        <div className="h-12 border-b border-zinc-800/60 flex items-center px-4 bg-[#0e0e10] shrink-0 font-mono">
+      <div className="w-[380px] relative flex flex-col border-r border-zinc-800 bg-[#111113] shrink-0">
+        <div className="h-12 w-full absolute top-0 z-10 border-b border-zinc-800/60 flex items-center px-4 bg-[#0e0e10] shrink-0 font-mono">
           <div className="flex items-center space-x-2 text-zinc-400">
              <Code2 className="w-4 h-4" />
              <span className="text-xs font-medium truncate">{projectName}</span>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide pt-6">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide pt-16 pb-48" ref={chatContainerRef}>
           {messages.map((msg, idx) => (
             <div key={idx} className="space-y-2">
               {msg.role === 'assistant' ? (
@@ -525,13 +558,14 @@ export default function BuilderApp() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-[#111113] pt-0">
-          <div className="flex items-center space-x-1.5 text-xs text-white mb-3 px-1">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{input.trim().startsWith('/') ? 'Commands' : 'Suggestions'}</span>
-            <span className="flex-1"></span>
-            <span className="text-zinc-500 font-mono text-[10px]">{selectedModel}</span>
-          </div>
+        <div className="absolute bottom-0 w-full p-4 bg-transparent pt-0 z-10 pointer-events-none flex flex-col justify-end">
+          <div className="pointer-events-auto">
+            <div className="flex items-center space-x-1.5 text-xs text-white mb-3 px-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="drop-shadow-md">{input.trim().startsWith('/') ? 'Commands' : 'Suggestions'}</span>
+              <span className="flex-1"></span>
+              <span className="text-zinc-500 font-mono text-[10px] drop-shadow-md">{selectedModel}</span>
+            </div>
           
           {input.trim().startsWith('/') ? (
             <div className="flex gap-2 overflow-x-auto mb-3 scrollbar-hide pb-1 min-h-[28px]">
@@ -566,6 +600,12 @@ export default function BuilderApp() {
                     className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'meta-llama/llama-3.3-70b-instruct:free' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
                   >
                     Llama 3.3
+                  </button>
+                  <button
+                    onClick={() => { setSelectedModel('openrouter/free'); setInput(''); }}
+                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'openrouter/free' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                  >
+                    Auto (Free)
                   </button>
                 </>
               )}
@@ -633,16 +673,28 @@ export default function BuilderApp() {
               className="flex-1 max-h-32 min-h-[44px] py-3 bg-transparent text-sm text-zinc-200 resize-none focus:outline-none placeholder:text-zinc-500"
               rows={1}
             />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || isGenerating}
-              className="p-2 m-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:hover:bg-zinc-700 text-zinc-300 rounded-xl transition-colors"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
+            {isGenerating ? (
+              <button
+                onClick={handleStop}
+                className="p-2 m-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-xl transition-colors"
+                title="Stop generation"
+              >
+                <Square className="w-4 h-4 fill-current" />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!input.trim()}
+                className="p-2 m-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:hover:bg-zinc-700 text-zinc-300 rounded-xl transition-colors"
+                title="Send message"
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          <div className="text-[10px] text-zinc-600 font-mono mt-2 text-center">
+          <div className="text-[10px] text-zinc-600 font-mono mt-2 text-center drop-shadow-md">
             AI may produce false information.
+          </div>
           </div>
         </div>
       </div>
