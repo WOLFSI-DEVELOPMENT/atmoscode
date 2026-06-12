@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tavily } from "@tavily/core";
-import { ChatOpenAI } from "@langchain/openai";
-import { SystemMessage, HumanMessage, AIMessage } from "@langchain/core/messages";
+import OpenAI from "openai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,27 +58,17 @@ We use WebContainers for the preview. You do not need to explicitly set up the w
        systemInstruction += "\nCRITICAL: Read and apply the available skills if they are relevant to the user request.";
     }
 
-    const chat = new ChatOpenAI({
-      modelName: modelToUse,
-      openAIApiKey: process.env.OPENROUTER_API_KEY || "dummy",
-      configuration: {
+    const openai = new OpenAI({
         baseURL: "https://openrouter.ai/api/v1",
-      },
-      maxTokens: 8192,
-      streaming: true,
-      temperature: 0.7,
+        apiKey: process.env.OPENROUTER_API_KEY || "dummy",
     });
 
-    let historyFormatted: any[] = [];
+    let historyFormatted = [];
     if (messages && messages.length > 0) {
-        historyFormatted = messages.map((m: any) => {
-            if (m.role === "user") {
-                return new HumanMessage(m.contents);
-            } else if (m.role === "assistant") {
-                return new AIMessage(m.contents);
-            }
-            return new HumanMessage(m.contents);
-        });
+        historyFormatted = messages.map((m: any) => ({
+            role: m.role,
+            content: m.contents
+        }));
     }
 
     const encoder = new TextEncoder();
@@ -87,28 +76,37 @@ We use WebContainers for the preview. You do not need to explicitly set up the w
       async start(controller) {
         try {
             let conversation = [
-              new SystemMessage(systemInstruction),
+              { role: 'system', content: systemInstruction },
               ...historyFormatted,
-              new HumanMessage(prompt)
+              { role: 'user', content: prompt }
             ];
             
             let hasMoreTurns = true;
             while (hasMoreTurns) {
                hasMoreTurns = false;
                
-               const responseStream = await chat.stream(conversation);
+               const responseStream = await openai.chat.completions.create({
+                  model: modelToUse,
+                  messages: conversation as any,
+                  stream: true,
+                  max_tokens: 8192
+               });
                
                let assistantMessage = "";
                
                for await (const chunk of responseStream) {
-                  if (chunk.content) {
+                  const delta = chunk.choices[0]?.delta;
+                  if (delta?.content) {
                      await new Promise(r => setTimeout(r, 40));
-                     controller.enqueue(encoder.encode(chunk.content.toString()));
-                     assistantMessage += chunk.content;
+                     controller.enqueue(encoder.encode(delta.content));
+                     assistantMessage += delta.content;
                   }
                }
                
-               conversation.push(new AIMessage(assistantMessage));
+               conversation.push({
+                  role: 'assistant',
+                  content: assistantMessage || null
+               } as any);
             }
         } catch (e: any) {
           controller.enqueue(encoder.encode(`\n[Error Stream Interrupted: ${e.message}]`));
