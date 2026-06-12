@@ -102,10 +102,8 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
           
           webcontainerInstance.on('server-ready', (port, url) => {
             currentAppUrl = url;
-            if (mounted) {
-              setUrl(url);
-              setStatus('ready');
-            }
+            setUrl(url);
+            setStatus('ready');
           });
         }
 
@@ -157,7 +155,6 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
         }
 
         const handleLog = (data: string) => {
-          if (!mounted) return;
           if (xtermRef.current) {
             xtermRef.current.write(data);
           }
@@ -165,7 +162,6 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
 
         if (!isDevServerRunning) {
           isDevServerRunning = true;
-          if (!mounted) return;
           
           // Install dependencies
           setStatus('installing');
@@ -178,11 +174,10 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
           
           const installExitCode = await installProcess.exit;
           if (installExitCode !== 0) {
+             isDevServerRunning = false;
              throw new Error('Installation failed');
           }
 
-          if (!mounted) return;
-          
           setStatus('starting');
           if (xtermRef.current) xtermRef.current.write('\r\n\x1b[1;33m▶\x1b[0m npm run dev\r\n');
           
@@ -193,10 +188,8 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
         }
 
       } catch (err: any) {
-        if (mounted) {
-          setStatus('error');
-          if (xtermRef.current) xtermRef.current.write(`\r\n\x1b[31;1mError: ${err.message}\x1b[0m\r\n`);
-        }
+        setStatus('error');
+        if (xtermRef.current) xtermRef.current.write(`\r\n\x1b[31;1mError: ${err.message}\x1b[0m\r\n`);
       }
     }
 
@@ -205,7 +198,7 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
     return () => {
       mounted = false;
     };
-  }, [debouncedFiles, files]);
+  }, [debouncedFiles]);
 
   if (files.length === 0) {
     return (
