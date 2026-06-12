@@ -41,10 +41,14 @@ Strict Rules:
 4. ALWAYS use the hugeicons-react library for icons.
 5. Only use <command> if you need to install a library or run a build. 
 6. Make sure to use modern package versions in package.json (e.g., Next 15+, React 18+, TypeScript 5.5+).
-7. Always configure the dev script to "dev": "next dev -H 0.0.0.0 -p 5173".
+7. Always configure the dev script to "dev": "next dev -H 0.0.0.0 -p 5173". The Preview will run \`npm run dev\` to start the application.
 8. After providing and editing all files, you MUST end with <command>npm run dev</command> to restart the dev server and verify it works.
 9. Finally, provide a brief conclusion message. Format it as a simple paragraph summarizing your work, followed by a bulleted list. Bold the topic of each bullet (e.g. "- **Feature**: Details..."). Keep it under 3 bullets. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any XML tags.
-10. NEVER manually write package-lock.json. To ensure it exists, always run <command>npm install</command> to generate it automatically within the environment.`;
+10. NEVER manually write package-lock.json. To ensure it exists, always run <command>npm install</command> to generate it automatically within the environment.
+11. 🧠 THINKING FIRST: Before editing or creating any file, or running any command, you MUST output a <thought> block explaining your reasoning and what you are about to do. This makes you smarter and helps the user understand your process.
+12. ⏳ COMMAND EXECUTION: You do not need to manually wait for commands to finish. The preview environment will automatically queue them, execute them asynchronously, and start the development server. Simply output your commands in sequence and proceed.
+
+We use WebContainers for the preview. You do not need to explicitly set up the webcontainer or write code for it. It is done automatically behind the scenes. The Preview automatically runs \`npm install\` and \`npm run dev\`. Your edits are also magically synced up with the WebContainer environment.`;
 
     if (skills && Array.isArray(skills) && skills.length > 0) {
        systemInstruction += "\n\nAvailable Skills:\n";
