@@ -262,6 +262,8 @@ Vercel (recommended)
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('google/gemini-3.5-flash');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [selectedFramework, setSelectedFramework] = useState<'nextjs' | 'html'>('nextjs');
+  const [isFrameworkDropdownOpen, setIsFrameworkDropdownOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('localhost:5173');
   const [previewKey, setPreviewKey] = useState<number>(0);
   const [restartKey, setRestartKey] = useState<number>(0);
@@ -349,7 +351,7 @@ Vercel (recommended)
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userPrompt, model: selectedModel, messages: historyMsg, skills: skills.filter(s => s.enabled) }),
+        body: JSON.stringify({ prompt: userPrompt, model: selectedModel, framework: selectedFramework, messages: historyMsg, skills: skills.filter(s => s.enabled) }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -507,6 +509,37 @@ Vercel (recommended)
                                {m.name}
                              </button>
                            ))}
+                         </div>
+                       )}
+                    </div>
+                    <div className="relative">
+                       <div 
+                           onClick={() => { setIsFrameworkDropdownOpen(!isFrameworkDropdownOpen); setIsModelDropdownOpen(false); }}
+                           className="flex items-center space-x-1 hover:text-zinc-200 cursor-pointer transition-colors text-xs font-mono bg-zinc-800/30 px-2 py-1 rounded-md"
+                       >
+                           <span className="text-zinc-400">{selectedFramework === 'nextjs' ? 'Next.js' : 'HTML'}</span>
+                           <ChevronDown className="w-3 h-3 ml-1" />
+                       </div>
+                       {isFrameworkDropdownOpen && (
+                         <div className="absolute top-full left-0 mt-2 w-32 bg-[#111113] border border-zinc-800 rounded-lg shadow-xl z-50 py-1 flex flex-col">
+                             <button
+                               onClick={() => {
+                                 setSelectedFramework('nextjs');
+                                 setIsFrameworkDropdownOpen(false);
+                               }}
+                               className={`text-left px-3 py-2 text-xs hover:bg-[#1e1e20] transition-colors ${selectedFramework === 'nextjs' ? 'text-white bg-[#1e1e20]' : 'text-zinc-400'}`}
+                             >
+                               Next.js
+                             </button>
+                             <button
+                               onClick={() => {
+                                 setSelectedFramework('html');
+                                 setIsFrameworkDropdownOpen(false);
+                               }}
+                               className={`text-left px-3 py-2 text-xs hover:bg-[#1e1e20] transition-colors ${selectedFramework === 'html' ? 'text-white bg-[#1e1e20]' : 'text-zinc-400'}`}
+                             >
+                               HTML
+                             </button>
                          </div>
                        )}
                     </div>
