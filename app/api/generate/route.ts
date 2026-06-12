@@ -43,7 +43,8 @@ Strict Rules:
 6. Make sure to use modern package versions in package.json (e.g., Next 15+, React 18+, TypeScript 5.5+).
 7. Always configure the dev script to "dev": "next dev -H 0.0.0.0 -p 5173".
 8. After providing and editing all files, you MUST end with <command>npm run dev</command> to restart the dev server and verify it works.
-9. Finally, provide a brief conclusion message. Format it as a simple paragraph summarizing your work, followed by a bulleted list. Bold the topic of each bullet (e.g. "- **Feature**: Details..."). Keep it under 3 bullets. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any XML tags.`;
+9. Finally, provide a brief conclusion message. Format it as a simple paragraph summarizing your work, followed by a bulleted list. Bold the topic of each bullet (e.g. "- **Feature**: Details..."). Keep it under 3 bullets. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any XML tags.
+10. NEVER manually write package-lock.json. To ensure it exists, always run <command>npm install</command> to generate it automatically within the environment.`;
 
     if (skills && Array.isArray(skills) && skills.length > 0) {
        systemInstruction += "\n\nAvailable Skills:\n";

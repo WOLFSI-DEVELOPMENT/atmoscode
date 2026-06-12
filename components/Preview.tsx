@@ -49,6 +49,29 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
   
   const [debouncedFiles, setDebouncedFiles] = useState(files);
   const xtermRef = useRef<{ write: (s: string) => void }>({ write: () => {} });
+  const [logLine, setLogLine] = useState('');
+  const logBufferRef = useRef('');
+  const [commandProgress, setCommandProgress] = useState(0);
+
+  useEffect(() => {
+    setCommandProgress(0);
+  }, [status]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (logBufferRef.current) {
+         const clean = logBufferRef.current.replace(/\x1b\[[0-9;]*m/g, '').trim();
+         if (clean) {
+            const lines = clean.split('\n');
+            let lastLine = lines[lines.length - 1].trim();
+            if (!lastLine && lines.length > 1) lastLine = lines[lines.length - 2].trim();
+            if (lastLine) setLogLine(lastLine.substring(0, 60));
+         }
+         logBufferRef.current = '';
+      }
+    }, 150);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedFiles(files), 1000);
@@ -158,6 +181,11 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
           if (xtermRef.current) {
             xtermRef.current.write(data);
           }
+          logBufferRef.current += data;
+          setCommandProgress((prev: number) => {
+             const newProg = prev + (100 - prev) * 0.05;
+             return newProg > 99 ? 99 : newProg;
+          });
         };
 
         if (!isDevServerRunning) {
@@ -232,8 +260,8 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
       idle: 0,
       booting: 20,
       mounting: 40,
-      installing: 70,
-      starting: 90,
+      installing: 40 + (commandProgress * 0.40),
+      starting: 80 + (commandProgress * 0.15),
       ready: 100,
       error: 100
     };
@@ -246,18 +274,24 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
         
         <div className="w-64 h-1 bg-zinc-200 rounded-full overflow-hidden mb-3">
            <div 
-             className="h-full bg-zinc-800 transition-all duration-500 ease-out"
+             className="h-full bg-zinc-900 transition-all duration-300 ease-out"
              style={{ width: `${progress}%` }}
            />
         </div>
 
-        <p className="text-sm font-medium text-zinc-500">
+        <p className="text-sm font-medium text-zinc-600">
            {status === 'booting' && 'Starting environment...'}
            {status === 'mounting' && 'Syncing files...'}
            {status === 'installing' && 'Installing dependencies...'}
            {status === 'starting' && 'Starting development server...'}
            {status === 'idle' && 'Preparing...'}
         </p>
+        
+        {(status === 'installing' || status === 'starting') && logLine && (
+           <p className="text-xs text-zinc-400 mt-2 font-mono truncate max-w-sm" title={logLine}>
+             {logLine}
+           </p>
+        )}
       </div>
     );
   }
