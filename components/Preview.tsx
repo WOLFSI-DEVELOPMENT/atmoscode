@@ -185,6 +185,9 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
           activeProcessObj.output.pipeTo(new WritableStream({
              write(data) { handleLog(data); }
           }));
+        } else if (currentAppUrl) {
+          setStatus('ready');
+          setUrl(currentAppUrl);
         }
 
       } catch (err: any) {
@@ -225,11 +228,30 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
   }
 
   if (status !== 'ready' || !url) {
+    const progressMap: Record<string, number> = {
+      idle: 0,
+      booting: 20,
+      mounting: 40,
+      installing: 70,
+      starting: 90,
+      ready: 100,
+      error: 100
+    };
+    const progress = progressMap[status] || 0;
+
     return (
       <div className="flex-1 bg-white flex flex-col items-center justify-center p-6 text-zinc-800">
         <Loader2 className="w-8 h-8 animate-spin mb-4 text-zinc-400" />
-        <h3 className="text-xl font-medium mb-2">Building your preview</h3>
-        <p className="text-zinc-500">
+        <h3 className="text-xl font-medium mb-6">Building your preview</h3>
+        
+        <div className="w-64 h-1 bg-zinc-200 rounded-full overflow-hidden mb-3">
+           <div 
+             className="h-full bg-zinc-800 transition-all duration-500 ease-out"
+             style={{ width: `${progress}%` }}
+           />
+        </div>
+
+        <p className="text-sm font-medium text-zinc-500">
            {status === 'booting' && 'Starting environment...'}
            {status === 'mounting' && 'Syncing files...'}
            {status === 'installing' && 'Installing dependencies...'}
