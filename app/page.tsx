@@ -191,8 +191,10 @@ const parseFullText = (text: string, previousFiles: FileNode[]) => {
 }
 
 const AVAILABLE_MODELS = [
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
-  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
+  { id: 'google/gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+  { id: 'google/gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' },
+  { id: 'google/gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
   { id: 'anthropic/claude-3.7-sonnet', name: 'Claude 3.7 Sonnet' },
   { id: 'meta-llama/llama-3.1-70b-instruct', name: 'Llama 3.1 70B' },
   { id: 'nousresearch/hermes-3-llama-3.1-405b:free', name: 'Hermes Agent' },
@@ -257,7 +259,7 @@ Vercel (recommended)
   ]);
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash');
+  const [selectedModel, setSelectedModel] = useState<string>('google/gemini-3.5-flash');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('localhost:5173');
   const [previewKey, setPreviewKey] = useState<number>(0);
@@ -746,16 +748,28 @@ Vercel (recommended)
               {'/model'.startsWith(input.toLowerCase()) && (
                 <>
                   <button
-                    onClick={() => { setSelectedModel('gemini-3.5-flash'); setInput(''); }}
-                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'gemini-3.5-flash' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                    onClick={() => { setSelectedModel('google/gemini-3.5-flash'); setInput(''); }}
+                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'google/gemini-3.5-flash' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
                   >
                     Gemini 3.5 Flash
                   </button>
                   <button
-                    onClick={() => { setSelectedModel('gemini-3.1-flash-lite'); setInput(''); }}
-                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'gemini-3.1-flash-lite' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                    onClick={() => { setSelectedModel('google/gemini-3.1-flash-lite'); setInput(''); }}
+                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'google/gemini-3.1-flash-lite' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
                   >
                     Gemini 3.1 Flash Lite
+                  </button>
+                  <button
+                    onClick={() => { setSelectedModel('google/gemini-3-flash-preview'); setInput(''); }}
+                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'google/gemini-3-flash-preview' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                  >
+                    Gemini 3 Flash Preview
+                  </button>
+                  <button
+                    onClick={() => { setSelectedModel('google/gemini-3.1-pro-preview'); setInput(''); }}
+                    className={`whitespace-nowrap px-4 py-1.5 ${selectedModel === 'google/gemini-3.1-pro-preview' ? 'bg-[#404044] text-white' : 'bg-[#1e1e20] text-zinc-300'} hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                  >
+                    Gemini 3.1 Pro Preview
                   </button>
                   <button
                     onClick={() => { setSelectedModel('nousresearch/hermes-3-llama-3.1-405b:free'); setInput(''); }}
