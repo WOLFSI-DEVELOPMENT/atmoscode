@@ -52,6 +52,8 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
   const [logLine, setLogLine] = useState('');
   const logBufferRef = useRef('');
   const [commandProgress, setCommandProgress] = useState(0);
+  const [internalPreviewKey, setInternalPreviewKey] = useState(0);
+  const hasCompiledRef = useRef(false);
 
   useEffect(() => {
     setCommandProgress(0);
@@ -186,6 +188,12 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
              const newProg = prev + (100 - prev) * 0.05;
              return newProg > 99 ? 99 : newProg;
           });
+          
+          if (!hasCompiledRef.current && (data.includes('Compiled /') || data.includes('compiled client and server'))) {
+             hasCompiledRef.current = true;
+             // Give Next.js a moment to flush to disk, then reload iframe to bypass 404
+             setTimeout(() => setInternalPreviewKey(k => k + 1), 500);
+          }
         };
 
         if (!isDevServerRunning) {
@@ -299,7 +307,7 @@ export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: 
   return (
     <div className="flex-1 bg-white relative w-full h-full">
       <iframe 
-        key={previewKey}
+        key={`${previewKey}-${internalPreviewKey}`}
         ref={previewIframeRef}
         src={url}
         className="w-full h-full border-0 bg-white"
