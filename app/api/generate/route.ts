@@ -43,14 +43,14 @@ Strict Rules:
 6. Make sure to use modern package versions in package.json (e.g., Next 15+, React 18+, TypeScript 5.5+).
 7. Always configure the dev script to "dev": "next dev -H 0.0.0.0 -p 5173".
 8. After providing and editing all files, you MUST end with <command>npm run dev</command> to restart the dev server and verify it works.
-9. Finally, provide a brief, humble conclusion message. Keep it under 3 bullet points. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any tags.`;
+9. Finally, provide a brief conclusion message. Format it as a simple paragraph summarizing your work, followed by a bulleted list. Bold the topic of each bullet (e.g. "- **Feature**: Details..."). Keep it under 3 bullets. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any XML tags.`;
 
     if (skills && Array.isArray(skills) && skills.length > 0) {
        systemInstruction += "\n\nAvailable Skills:\n";
        skills.forEach(skill => {
          systemInstruction += `\n--- Skill: ${skill.name} ---\n${skill.description}\n\n${skill.content}\n`;
        });
-       systemInstruction += "\nCRITICAL: Read and apply the available skills if they are relevant to the user request. You may read docs from pages directly using tavily function call.";
+       systemInstruction += "\nCRITICAL: Read and apply the available skills if they are relevant to the user request.";
     }
 
     const openai = new OpenAI({
@@ -84,21 +84,9 @@ Strict Rules:
                   model: modelToUse,
                   messages: conversation as any,
                   stream: true,
-                  tools: [{
-                     type: "function",
-                     function: {
-                        name: "tavilySearch",
-                        description: "Search the web using Tavily API to get real-time information or documentation.",
-                        parameters: {
-                           type: "object",
-                           properties: { query: { type: "string" } },
-                           required: ["query"]
-                        }
-                     }
-                  }]
+                  max_tokens: 8192
                });
                
-               let toolCallBuf: any = {};
                let assistantMessage = "";
                
                for await (const chunk of responseStream) {
@@ -108,58 +96,12 @@ Strict Rules:
                      controller.enqueue(encoder.encode(delta.content));
                      assistantMessage += delta.content;
                   }
-                  if (delta?.tool_calls) {
-                     for (const tc of delta.tool_calls) {
-                        if (!toolCallBuf[tc.index]) toolCallBuf[tc.index] = { id: tc.id, name: tc.function?.name, args: "" };
-                        if (tc.function?.arguments) toolCallBuf[tc.index].args += tc.function.arguments;
-                     }
-                  }
                }
                
                conversation.push({
                   role: 'assistant',
-                  content: assistantMessage || null,
-                  tool_calls: Object.values(toolCallBuf).length > 0 ? Object.values(toolCallBuf).map((t: any) => ({
-                     id: t.id,
-                     type: "function",
-                     function: { name: t.name, arguments: t.args }
-                  })) : undefined
+                  content: assistantMessage || null
                } as any);
-               
-               const toolCallsArr = Object.values(toolCallBuf);
-               if (toolCallsArr.length > 0) {
-                  for (const call of toolCallsArr as any[]) {
-                     if (call.name === 'tavilySearch') {
-                        let queryObj: any = { query: call.args };
-                        try { queryObj = JSON.parse(call.args); } catch (e) {}
-                        const query = queryObj.query || call.args;
-                        
-                        controller.enqueue(encoder.encode(`\n<search query="${query}">\nSearching...\n`));
-                        
-                        let searchRes = "";
-                        try {
-                           if (process.env.TAVILY_API_KEY && process.env.TAVILY_API_KEY !== "tvly-DUMMY") {
-                              const res = await tvly.search(query, { searchDepth: 'basic', maxResults: 3 });
-                              searchRes = res.results.map((r: any) => `* [${r.title}](${r.url})\n${r.content}`).join('\n\n');
-                           } else {
-                              searchRes = "Tavily API key is missing. Simulation: I found some generic results for " + query;
-                           }
-                        } catch (e) {
-                           searchRes = "Failed to search the web.";
-                        }
-                        
-                        controller.enqueue(encoder.encode(`\n${searchRes}\n</search>\n`));
-                        
-                        conversation.push({
-                           role: 'tool',
-                           tool_call_id: call.id,
-                           name: call.name,
-                           content: JSON.stringify({ result: searchRes })
-                        } as any);
-                     }
-                  }
-                  hasMoreTurns = true;
-               }
             }
         } catch (e: any) {
           controller.enqueue(encoder.encode(`\n[Error Stream Interrupted: ${e.message}]`));

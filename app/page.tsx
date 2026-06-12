@@ -207,7 +207,8 @@ export default function BuilderApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'preview' | 'code' | 'skills'>('code');
+  const [activeTab, setActiveTab] = useState<'preview' | 'code'>('code');
+  const [isSkillsOpen, setIsSkillsOpen] = useState(false);
 
   const [skills, setSkills] = useState<{name: string, description: string, content: string, enabled: boolean}[]>([
      {
@@ -675,14 +676,14 @@ Vercel (recommended)
                      <div className="markdown-body">
                        <ReactMarkdown
                          components={{
-                           h1: ({node, ...props}) => <h1 className="text-lg font-semibold mt-4 mb-2 text-zinc-100" {...props} />,
-                           h2: ({node, ...props}) => <h2 className="text-md font-semibold mt-4 mb-2 text-zinc-100" {...props} />,
+                           h1: ({node, ...props}) => <h1 className="text-lg font-semibold mt-5 mb-3 text-zinc-100 tracking-tight" {...props} />,
+                           h2: ({node, ...props}) => <h2 className="text-md font-semibold mt-5 mb-3 text-zinc-100 tracking-tight" {...props} />,
                            h3: ({node, ...props}) => <h3 className="text-base font-semibold mt-4 mb-2 text-zinc-100" {...props} />,
-                           p: ({node, ...props}) => <p className="mb-4 leading-relaxed" {...props} />,
-                           ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-4 space-y-1" {...props} />,
-                           ol: ({node, ...props}) => <ol className="list-decimal pl-4 mb-4 space-y-1" {...props} />,
-                           li: ({node, ...props}) => <li className="text-zinc-300" {...props} />,
-                           strong: ({node, ...props}) => <strong className="font-semibold text-zinc-200" {...props} />,
+                           p: ({node, ...props}) => <p className="mb-4 leading-relaxed text-[15px] text-[#e2e2e2]" {...props} />,
+                           ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-6 space-y-3 mt-3" {...props} />,
+                           ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-6 space-y-3 mt-3" {...props} />,
+                           li: ({node, ...props}) => <li className="text-[15px] text-[#e2e2e2] marker:text-zinc-500 leading-relaxed pl-1" {...props} />,
+                           strong: ({node, ...props}) => <strong className="font-semibold text-zinc-100" {...props} />,
                            code: ({node, className, children, ...props}) => {
                               return <code className="bg-zinc-800/50 px-1.5 py-0.5 rounded text-xs font-mono text-zinc-300" {...props}>{children}</code>
                            }
@@ -745,6 +746,15 @@ Vercel (recommended)
           
           {input.trim().startsWith('/') ? (
             <div className="flex gap-2 overflow-x-auto mb-3 scrollbar-hide pb-1 min-h-[28px]">
+              {'/skill'.startsWith(input.toLowerCase()) && (
+                <button
+                  onClick={() => { setIsSkillsOpen(true); setInput(''); }}
+                  className={`whitespace-nowrap px-4 py-1.5 focus:bg-[#2a2a2d] bg-[#1e1e20] text-zinc-300 hover:bg-[#2a2a2d] text-xs rounded-full transition-colors`}
+                >
+                  <FileText className="w-3.5 h-3.5 inline-block mr-1.5" />
+                  Manage Skills
+                </button>
+              )}
               {'/model'.startsWith(input.toLowerCase()) && (
                 <>
                   <button
@@ -906,13 +916,6 @@ Vercel (recommended)
               <Code2 className="w-4 h-4" />
               <span>Code</span>
             </button>
-            <button
-              onClick={() => setActiveTab('skills')}
-              className={`flex items-center px-4 py-1.5 space-x-2 text-xs font-medium rounded-full transition-colors ${activeTab === 'skills' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Skills</span>
-            </button>
           </div>
 
           <div className="flex items-center space-x-4 text-zinc-400">
@@ -1055,47 +1058,68 @@ Vercel (recommended)
         </div>
       </div>
 
-      <div className={`flex-1 bg-[#181818] overflow-y-auto ${activeTab === 'skills' ? 'block' : 'hidden'}`}>
-        <div className="max-w-4xl mx-auto p-8 border-r border-l border-zinc-800 min-h-full">
-           <div className="mb-8">
-              <h1 className="text-2xl font-bold text-zinc-100 flex items-center space-x-3">
-                 <FileText className="w-6 h-6 text-emerald-400" />
-                 <span>Agent Skills</span>
-              </h1>
-              <p className="text-sm text-zinc-400 mt-2">Manage the context and capabilities the AI agent has access to.</p>
-           </div>
-           
-           <div className="space-y-4">
-              {skills.map((skill, idx) => (
-                 <div key={idx} className="p-4 border justify-between flex border-zinc-800 bg-[#121212] rounded-xl flex-col md:flex-row">
-                    <div className="flex-1 pr-6">
-                       <h3 className="text-base font-semibold text-emerald-400">{skill.name}</h3>
-                       <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{skill.description}</p>
+      <AnimatePresence>
+        {isSkillsOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsSkillsOpen(false)}
+          >
+            <div 
+              className="bg-[#181818] w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl border border-zinc-800 shadow-2xl p-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h1 className="text-2xl font-bold text-zinc-100 flex items-center space-x-3">
+                     <FileText className="w-6 h-6 text-emerald-400" />
+                     <span>Agent Skills</span>
+                  </h1>
+                  <p className="text-sm text-zinc-400 mt-2">Manage the context and capabilities the AI agent has access to.</p>
+                </div>
+                <button 
+                  onClick={() => setIsSkillsOpen(false)}
+                  className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                 {skills.map((skill, idx) => (
+                    <div key={idx} className="p-4 border justify-between flex border-zinc-800 bg-[#121212] rounded-xl flex-col md:flex-row">
+                       <div className="flex-1 pr-6">
+                          <h3 className="text-base font-semibold text-emerald-400">{skill.name}</h3>
+                          <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{skill.description}</p>
+                       </div>
+                       <div className="mt-4 flex items-center space-x-3">
+                          <span className="text-sm text-zinc-500">{skill.enabled ? 'Enabled' : 'Disabled'}</span>
+                          <button
+                            onClick={() => {
+                               setSkills(prev => {
+                                  const arr = [...prev];
+                                  arr[idx].enabled = !arr[idx].enabled;
+                                  return arr;
+                               });
+                            }}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                              skill.enabled ? 'bg-emerald-500' : 'bg-zinc-700'
+                            }`}
+                          >
+                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              skill.enabled ? 'translate-x-2 bg-zinc-900' : '-translate-x-2'
+                            }`} />
+                          </button>
+                       </div>
                     </div>
-                    <div className="mt-4 flex items-center space-x-3">
-                       <span className="text-sm text-zinc-500">{skill.enabled ? 'Enabled' : 'Disabled'}</span>
-                       <button
-                         onClick={() => {
-                            setSkills(prev => {
-                               const arr = [...prev];
-                               arr[idx].enabled = !arr[idx].enabled;
-                               return arr;
-                            });
-                         }}
-                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-                           skill.enabled ? 'bg-emerald-500' : 'bg-zinc-700'
-                         }`}
-                       >
-                         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                           skill.enabled ? 'translate-x-2 bg-zinc-900' : '-translate-x-2'
-                         }`} />
-                       </button>
-                    </div>
-                 </div>
-              ))}
-           </div>
-        </div>
-      </div>
+                 ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Editor Settings Sidebar */}
       <AnimatePresence>
