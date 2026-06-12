@@ -205,11 +205,63 @@ export default function BuilderApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'preview' | 'code'>('code');
+  const [activeTab, setActiveTab] = useState<'preview' | 'code' | 'skills'>('code');
+
+  const [skills, setSkills] = useState<{name: string, description: string, content: string, enabled: boolean}[]>([
+     {
+        name: 'nextjs-builder',
+        description: 'Build, scaffold, and ship production-grade Next.js websites and apps using Next.js 16...',
+        enabled: true,
+        content: `Build, scaffold, and ship production-grade Next.js websites and apps using Next.js 16 (latest stable: 16.2.9, released May 2026).
+Use this skill whenever the user wants to create a Next.js project, build a page, route, component, API endpoint, or full app using the App Router.
+Also trigger for tasks like setting up authentication, fetching data with Server Components, handling forms with Server Actions, deploying to Vercel, optimizing images/fonts/SEO, or migrating from Next.js 14/15.
+Trigger even for casual asks: "build me a landing page in Next.js", "set up a Next.js blog", "add an API route to my Next app", "how do I fetch data in Next.js".
+This skill covers the full stack: App Router, Server & Client Components, Server Actions, Turbopack, Middleware, and TypeScript-first patterns.
+
+## Quick Reference: Next.js 16 (Latest)
+- Latest stable: 16.2.9 (May 7, 2026)
+- Min Node.js: 20.9.0 (LTS)
+- Min TypeScript: 5.1.0
+- React version: 19.2
+- Build system: Turbopack (default, stable)
+
+## 1. Scaffolding a New Project
+npx create-next-app@latest my-app
+
+## 2. Core Concepts
+Always use App Router (src/app/)
+Default: Server Component. Client Component: add "use client"
+All dynamic request APIs are now async-only.
+Data Fetching Patterns: avoid waterfalls
+API Routes: route.ts
+
+## 3. next.config.ts (v16 patterns)
+Turbopack is default in v16
+
+## 4. Layouts & Metadata
+Root layout (required)
+
+## 5. Common Patterns
+Auth (recommended: next-auth v5 / Auth.js)
+Middleware (v16: proxy convention)
+Image optimization
+Link & navigation
+
+## 6. Deployment
+Vercel (recommended)
+
+## Reference Docs
+- Official docs: https://nextjs.org/docs
+- Migration v15->v16: https://nextjs.org/docs/app/guides/upgrading/version-16`
+     }
+  ]);
+
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('localhost:5173');
+  const [previewKey, setPreviewKey] = useState<number>(0);
+  const [restartKey, setRestartKey] = useState<number>(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const [editorSettings, setEditorSettings] = useState({
@@ -271,15 +323,6 @@ export default function BuilderApp() {
     const userPrompt = input.trim();
     setInput('');
 
-    if (userPrompt.toLowerCase() === '/skills') {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', content: userPrompt },
-        { role: 'assistant', content: 'Skills management is coming soon!' }
-      ]);
-      return;
-    }
-
     setMessages((prev) => [...prev, { role: 'user', content: userPrompt }]);
     setIsGenerating(true);
 
@@ -303,7 +346,7 @@ export default function BuilderApp() {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userPrompt, model: selectedModel, messages: historyMsg }),
+        body: JSON.stringify({ prompt: userPrompt, model: selectedModel, messages: historyMsg, skills: skills.filter(s => s.enabled) }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -317,6 +360,7 @@ export default function BuilderApp() {
       
       const decoder = new TextDecoder();
       let fullText = "";
+      let handledCommandCount = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -340,6 +384,12 @@ export default function BuilderApp() {
         const hasFileAction = actions.some(a => a.type === 'file');
         if (hasFileAction && activeTab !== 'code') {
            setActiveTab('code');
+        }
+        
+        const devCommandCount = actions.filter(a => a.type === 'command' && a.completed && a.command?.includes('dev')).length;
+        if (devCommandCount > handledCommandCount) {
+             handledCommandCount = devCommandCount;
+             setRestartKey(k => k + 1);
         }
       }
 
@@ -842,6 +892,13 @@ export default function BuilderApp() {
               <Code2 className="w-4 h-4" />
               <span>Code</span>
             </button>
+            <button
+              onClick={() => setActiveTab('skills')}
+              className={`flex items-center px-4 py-1.5 space-x-2 text-xs font-medium rounded-full transition-colors ${activeTab === 'skills' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'}`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Skills</span>
+            </button>
           </div>
 
           <div className="flex items-center space-x-4 text-zinc-400">
@@ -859,7 +916,12 @@ export default function BuilderApp() {
             <div className="flex items-center space-x-2 text-zinc-500">
               <ChevronLeft className="w-4 h-4 hover:text-zinc-300 cursor-pointer" />
               <ChevronRight className="w-4 h-4 hover:text-zinc-300 cursor-pointer" />
-              <RefreshCw className="w-4 h-4 hover:text-zinc-300 cursor-pointer" />
+              <button onClick={() => setPreviewKey(k => k + 1)} title="Reload frame" className="hover:text-zinc-300">
+                <RefreshCw className="w-4 h-4 cursor-pointer" />
+              </button>
+              <button onClick={() => setRestartKey(k => k + 1)} title="Restart Dev Server" className="text-emerald-500/80 hover:text-emerald-400">
+                <Terminal className="w-4 h-4 cursor-pointer" />
+              </button>
             </div>
             <div className="flex-1 bg-zinc-800/50 rounded-full px-3 py-1.5 max-w-xl mx-auto flex items-center justify-center text-xs text-zinc-400 font-mono truncate">
               {previewUrl}
@@ -868,7 +930,7 @@ export default function BuilderApp() {
           </div>
 
           <div className={`flex-1 ${activeTab === 'preview' ? 'flex' : 'hidden'}`}>
-            <Preview files={currentFiles} onUrlChange={setPreviewUrl} />
+            <Preview files={currentFiles} onUrlChange={setPreviewUrl} previewKey={previewKey} restartKey={restartKey} />
           </div>
 
           <div className={`flex-1 bg-[#1e1e1e] overflow-hidden ${activeTab === 'code' ? 'flex' : 'hidden'}`}>
@@ -928,6 +990,14 @@ export default function BuilderApp() {
                           value={activeFileContent}
                           onChange={handleFileChange}
                           options={{
+                            scrollbar: { 
+                              verticalScrollbarSize: 0, 
+                              horizontalScrollbarSize: 0, 
+                              verticalSliderSize: 0,
+                              horizontalSliderSize: 0,
+                              vertical: 'hidden', 
+                              horizontal: 'hidden' 
+                            },
                             minimap: { enabled: editorSettings.minimap },
                             wordWrap: editorSettings.wordWrap ? 'on' : 'off',
                             fontLigatures: editorSettings.fontLigatures,
@@ -968,6 +1038,48 @@ export default function BuilderApp() {
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <div className={`flex-1 bg-[#181818] overflow-y-auto ${activeTab === 'skills' ? 'block' : 'hidden'}`}>
+        <div className="max-w-4xl mx-auto p-8 border-r border-l border-zinc-800 min-h-full">
+           <div className="mb-8">
+              <h1 className="text-2xl font-bold text-zinc-100 flex items-center space-x-3">
+                 <FileText className="w-6 h-6 text-emerald-400" />
+                 <span>Agent Skills</span>
+              </h1>
+              <p className="text-sm text-zinc-400 mt-2">Manage the context and capabilities the AI agent has access to.</p>
+           </div>
+           
+           <div className="space-y-4">
+              {skills.map((skill, idx) => (
+                 <div key={idx} className="p-4 border justify-between flex border-zinc-800 bg-[#121212] rounded-xl flex-col md:flex-row">
+                    <div className="flex-1 pr-6">
+                       <h3 className="text-base font-semibold text-emerald-400">{skill.name}</h3>
+                       <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{skill.description}</p>
+                    </div>
+                    <div className="mt-4 flex items-center space-x-3">
+                       <span className="text-sm text-zinc-500">{skill.enabled ? 'Enabled' : 'Disabled'}</span>
+                       <button
+                         onClick={() => {
+                            setSkills(prev => {
+                               const arr = [...prev];
+                               arr[idx].enabled = !arr[idx].enabled;
+                               return arr;
+                            });
+                         }}
+                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                           skill.enabled ? 'bg-emerald-500' : 'bg-zinc-700'
+                         }`}
+                       >
+                         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                           skill.enabled ? 'translate-x-2 bg-zinc-900' : '-translate-x-2'
+                         }`} />
+                       </button>
+                    </div>
+                 </div>
+              ))}
+           </div>
         </div>
       </div>
 

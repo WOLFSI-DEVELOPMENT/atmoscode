@@ -10,6 +10,8 @@ interface FileNode {
 interface PreviewProps {
   files: FileNode[];
   onUrlChange?: (url: string) => void;
+  previewKey?: number;
+  restartKey?: number;
 }
 
 // Keep global references to persist WebContainer across renders
@@ -40,7 +42,7 @@ function buildFileSystemTree(files: FileNode[]) {
   return tree;
 }
 
-export function Preview({ files, onUrlChange }: PreviewProps) {
+export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: PreviewProps) {
   const [url, setUrl] = useState<string | null>(currentAppUrl);
   const [status, setStatus] = useState<'idle' | 'booting' | 'mounting' | 'installing' | 'starting' | 'ready' | 'error'>(currentAppUrl ? 'ready' : 'idle');
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
@@ -60,6 +62,29 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
   }, [url, onUrlChange]);
 
   // Terminal initialization removed as per user request
+
+  useEffect(() => {
+    if (restartKey > 0 && webcontainerInstance && activeProcessObj) {
+      const restart = async () => {
+        try {
+          setStatus('starting');
+          activeProcessObj.kill();
+          if (xtermRef.current) xtermRef.current.write('\r\n\x1b[1;33m▶\x1b[0m Restarting dev server (npm run dev)...\r\n');
+          
+          activeProcessObj = await webcontainerInstance!.spawn('npm', ['run', 'dev']);
+          activeProcessObj.output.pipeTo(new WritableStream({
+             write(data) { 
+               if (xtermRef.current) xtermRef.current.write(data); 
+             }
+          }));
+          setStatus('ready');
+        } catch(e) {
+          console.error(e);
+        }
+      };
+      restart();
+    }
+  }, [restartKey]);
 
   useEffect(() => {
     let mounted = true;
@@ -225,6 +250,7 @@ export function Preview({ files, onUrlChange }: PreviewProps) {
   return (
     <div className="flex-1 bg-white relative w-full h-full">
       <iframe 
+        key={previewKey}
         ref={previewIframeRef}
         src={url}
         className="w-full h-full border-0 bg-white"

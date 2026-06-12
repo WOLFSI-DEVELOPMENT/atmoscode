@@ -3,18 +3,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { tavily } from "@tavily/core";
 import OpenAI from "openai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "tvly-DUMMY" });
-
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, model, messages } = await req.json();
+    const apiKey = process.env.GEMINI_API_KEY;
+    const { prompt, model, messages, skills } = await req.json();
     let modelToUse = model || "gemini-2.5-flash";
+    const isOpenRouter = modelToUse.includes('/');
+    
+    if (!isOpenRouter && !apiKey) {
+       return NextResponse.json({ error: "GEMINI_API_KEY is not configured" }, { status: 500 });
+    }
+    if (isOpenRouter && !process.env.OPENROUTER_API_KEY) {
+       return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured" }, { status: 500 });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey || "dummy" });
+    const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "tvly-DUMMY" });
     
     // fall back to 2.5 if 3.5 is requested and not available natively, though maybe openrouter has it, but assume if no slash it's google
     if (modelToUse.includes('3.5') && !modelToUse.includes('/')) modelToUse = 'gemini-2.5-flash';
 
-    const systemInstruction = `You are an expert full-stack developer AI. 
+    let systemInstruction = `You are an expert full-stack developer AI. 
 Provide your response using the following exactly-formatted tags. You can use them multiple times. Do NOT wrap your message in markdown code blocks.
 
 <thought>
@@ -30,16 +39,24 @@ file contents here
 </file>
 
 Strict Rules:
-1. If building from scratch, provide all files needed for a React Vite app. You MUST provide package.json, package-lock.json (can be minimal), vite.config.ts, index.html, src/main.tsx, and src/App.tsx.
+1. If building from scratch, provide all files needed for a Next.js app (App Router). You MUST provide package.json, next.config.mjs, tsconfig.json, app/layout.tsx, app/page.tsx, and app/globals.css. Before starting project set the whole environment and run <command>npm i next@latest react@latest react-dom@latest</command>.
 2. If making an update or fix, ONLY output the <file> blocks for files that actually require changes. Do not output unchanged files. Keep your edits surgical and smart.
-3. ALWAYS use Tailwind CSS and provide its configuration files (tailwind.config.js, postcss.config.js, src/index.css).
+3. ALWAYS use Tailwind CSS and provide its configuration files (tailwind.config.mjs, postcss.config.mjs).
 4. ALWAYS use the hugeicons-react library for icons.
 5. Only use <command> if you need to install a library or run a build. 
-6. Make sure to use the latest, modern package versions in package.json (e.g., React 19+, Vite 6+, TypeScript 5.5+). Do not use old versions like React 18 or Vite 4.
-7. After providing and editing all files, you MUST end with <command>npm run build</command> to verify it works.
-8. Finally, provide a brief, humble conclusion message. Keep it under 3 bullet points. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any tags.`;
+6. Make sure to use modern package versions in package.json (e.g., Next 15+, React 18+, TypeScript 5.5+).
+7. Always configure the dev script to "dev": "next dev -H 0.0.0.0 -p 5173".
+8. After providing and editing all files, you MUST end with <command>npm run dev</command> to restart the dev server and verify it works.
+9. Finally, provide a brief, humble conclusion message. Keep it under 3 bullet points. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any tags.`;
 
-    const isOpenRouter = modelToUse.includes('/');
+    if (skills && Array.isArray(skills) && skills.length > 0) {
+       systemInstruction += "\n\nAvailable Skills:\n";
+       skills.forEach(skill => {
+         systemInstruction += `\n--- Skill: ${skill.name} ---\n${skill.description}\n\n${skill.content}\n`;
+       });
+       systemInstruction += "\nCRITICAL: Read and apply the available skills if they are relevant to the user request. You may read docs from pages directly using tavily function call.";
+    }
+
     let openai: OpenAI | null = null;
     if (isOpenRouter) {
        openai = new OpenAI({
