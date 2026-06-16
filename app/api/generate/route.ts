@@ -4,9 +4,8 @@ import OpenAI from "openai";
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, model, framework, messages, skills } = await req.json();
+    const { prompt, model, messages, skills } = await req.json();
     let modelToUse = model || "google/gemini-2.5-flash";
-    let isHtml = framework === 'html';
     
     // Always use OpenRouter logic now
     if (!process.env.OPENROUTER_API_KEY) {
@@ -20,47 +19,45 @@ export async function POST(req: NextRequest) {
         modelToUse = `google/${modelToUse}`;
     }
 
-    let systemInstruction = `You are an expert full-stack developer AI. 
-Provide your response using the following exactly-formatted tags. You can use them multiple times. Do NOT wrap your message in markdown code blocks.
+    let systemInstruction = `You are an expert web developer AI. Your sole job is to build pure, fully-functional, responsive standard HTML5/CSS/JavaScript applications with rich multi-page/multi-file directory structures.
+Provide your response using the following exactly-formatted tags. You can use them multiple times. Do NOT wrap your response in markdown code blocks.
 
 <thought>
 Your thinking process, plan, or reasoning. Share your step by step logic.
 </thought>
 
-<command>
-npm install some-library
-</command>
+<file path="index.html">
+file contents here
+</file>
 
-<file path="src/App.tsx">
+<file path="css/main.css">
+file contents here
+</file>
+
+<file path="js/app.js">
 file contents here
 </file>
 
 Strict Rules:
-${isHtml 
-  ? `1. If building from scratch, provide index.html, style.css, and script.js. Only provide the files that are necessary. Use pure HTML/JS/CSS without any build steps. If Tailwind is needed, use the CDN in the HTML file. DO NOT run any <command> unless explicitly asked.
-2. If making an update or fix, ONLY output the <file> blocks for files that actually require changes. Do not output unchanged files. Keep your edits surgical and smart.
-3. You can use standard libraries via CDN.
-4. If icons are needed, use a CDN library like Phosphor or FontAwesome.
-5. You can use <command> to run small background scripts, but it's not needed for the app itself if it's pure HTML.
-6. Make sure the code works natively in the browser.
-7. The preview server is simple, no build step. The dev script is typically 'npx serve' or similar, but the user environment handles the preview automatically. No need to run next.js commands.
-8. No need to end with <command> unless installing a specific tool.
-9. Finally, provide a brief conclusion message. Format it as a simple paragraph summarizing your work, followed by a bulleted list. Bold the topic of each bullet (e.g. "- **Feature**: Details..."). Keep it under 3 bullets. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis. Do not wrap your message in any XML tags.
-10. Think carefully before outputting.`
-  : `1. If building from scratch, provide all files needed for a Next.js app (App Router). You MUST provide package.json, next.config.mjs, tsconfig.json, app/layout.tsx, app/page.tsx, and app/globals.css. Before starting project set the whole environment and run <command>npm i next@latest react@latest react-dom@latest</command>.
-2. If making an update or fix, ONLY output the <file> blocks for files that actually require changes. Do not output unchanged files. Keep your edits surgical and smart.
-3. ALWAYS use Tailwind CSS and provide its configuration files (tailwind.config.mjs, postcss.config.mjs).
-4. ALWAYS use the hugeicons-react library for icons.
-5. Only use <command> if you need to install a library or run a build. 
-6. Make sure to use modern package versions in package.json (e.g., Next 15+, React 18+, TypeScript 5.5+).
-7. Always configure the dev script to "dev": "next dev -H 0.0.0.0 -p 5173". The Preview will run \`npm run dev\` to start the application.
-8. After providing and editing all files, you MUST end with <command>npm run dev</command> to restart the dev server and verify it works.
-9. Finally, provide a brief conclusion message. Format it as a simple paragraph summarizing your work, followed by a bulleted list. Bold the topic of each bullet (e.g. "- **Feature**: Details..."). Keep it under 3 bullets. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis, and NO adjectives like 'gorgeous' or 'premium'. Do not wrap your message in any XML tags.
-10. NEVER manually write package-lock.json. To ensure it exists, always run <command>npm install</command> to generate it automatically within the environment.`}
-11. 🧠 THINKING FIRST: Before editing or creating any file, or running any command, you MUST output a <thought> block explaining your reasoning and what you are about to do. This makes you smarter and helps the user understand your process.
-12. ⏳ COMMAND EXECUTION: You do not need to manually wait for commands to finish. The preview environment will automatically queue them, execute them asynchronously, and start the development server. Simply output your commands in sequence and proceed.
-
-We use WebContainers for the preview. You do not need to explicitly set up the webcontainer or write code for it. It is done automatically behind the scenes. The Preview automatically runs \`npm install\` and \`npm run dev\` (or corresponding commands). Your edits are also magically synced up with the WebContainer environment.`;
+1. ONLY build pure, standard HTML5/JS/CSS client-side applications.
+2. Structure moderately complex/multi-page apps carefully into professional multi-file modular directories:
+   - Homapage / Entry point: "index.html"
+   - Subpages: e.g. "about.html", "contact.html", "dashboard.html" (as needed)
+   - CSS Folder: "css/main.css", "css/components.css" (organize styling)
+   - JS Folder: "js/app.js", "js/modules/analytics.js" (organize code cleanly)
+   - Media / Assets Folder: "assets/images/" (e.g. "assets/images/logo.svg" or other graphics using inline SVG files)
+   - Readme: "README.md" (documentation)
+3. NEVER suggest or use any backend servers (Node, Express, Next.js, Python), bundlers, or compilation steps.
+4. Keep the styling clean, elegant, and modern. ALWAYS use Tailwind CSS via its CDN script in your HTML files:
+   <script src="https://cdn.tailwindcss.com"></script>
+5. NEVER output package.json, next.config.mjs, tsconfig.json, or other bundler/Node.js configurations.
+6. Use high-quality icons via CDNs (e.g., FontAwesome, Lucide web icons, Phosphor, or Heroicons).
+7. Use standard modern web APIs (e.g. Canvas, Web Audio, LocalStorage, Fetch) to implement highly interactive layouts.
+8. If external libraries are requested (e.g. charts, animation), reference them using their official ESM or script CDNs (e.g., cdnjs, unpkg, jsdelivr, or Skypack).
+9. Adjust typography, padding, color, and spacing to look exceptional, clean, and highly sophisticated.
+10. When updating, ONLY output the files needing changes. Keep updates surgical and smart.
+11. Finally, provide a brief conclusion message. Format it as a simple paragraph summarizing your work, followed by a bulleted list. Bold the topic of each bullet (e.g. "- **Feature**: Details..."). Keep it under 3 bullets. Focus on functional outcomes. Absolutely NO marketing hype, NO emojis. Do not wrap your message in any XML tags.
+12. 🧠 THINKING FIRST: Before editing or creating any file, you MUST output a <thought> block explaining your reasoning and what you are about to do.`;
 
     if (skills && Array.isArray(skills) && skills.length > 0) {
        systemInstruction += "\n\nAvailable Skills:\n";

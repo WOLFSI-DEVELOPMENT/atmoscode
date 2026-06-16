@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { WebContainer } from '@webcontainer/api';
-import { Monitor, Play, Terminal, Loader2 } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Play, ShieldAlert, FileCode2 } from 'lucide-react';
 
 interface FileNode {
   path: string;
@@ -14,297 +13,186 @@ interface PreviewProps {
   restartKey?: number;
 }
 
-// Keep global references to persist WebContainer across renders
-let webcontainerInstance: WebContainer | null = null;
-let bootingPromise: Promise<WebContainer> | null = null;
-let isDevServerRunning = false;
-let currentAppUrl: string | null = null;
-let activeProcessObj: any = null;
-let previousFilesContent: Record<string, string> = {};
+export function Preview({ files, onUrlChange, previewKey = 0 }: PreviewProps) {
+  const [selectedHtmlPath, setSelectedHtmlPath] = useState<string>('index.html');
 
-function buildFileSystemTree(files: FileNode[]) {
-  const tree: Record<string, any> = {};
-  for (const file of files) {
-    const parts = file.path.replace(/^\//, '').split('/');
-    const fileName = parts.pop()!;
-    let current = tree;
-    for (const part of parts) {
-      if (!current[part]) {
-        current[part] = { directory: {} };
-      }
-      if (!current[part].directory) {
-          current[part].directory = {};
-      }
-      current = current[part].directory;
-    }
-    current[fileName] = { file: { contents: file.content } };
-  }
-  return tree;
-}
-
-export function Preview({ files, onUrlChange, previewKey = 0, restartKey = 0 }: PreviewProps) {
-  const [url, setUrl] = useState<string | null>(currentAppUrl);
-  const [status, setStatus] = useState<'idle' | 'booting' | 'mounting' | 'installing' | 'starting' | 'ready' | 'error'>(currentAppUrl ? 'ready' : 'idle');
-  const previewIframeRef = useRef<HTMLIFrameElement>(null);
-  
-  const [debouncedFiles, setDebouncedFiles] = useState(files);
-  const xtermRef = useRef<{ write: (s: string) => void }>({ write: () => {} });
-  const [logLine, setLogLine] = useState('');
-  const logBufferRef = useRef('');
-  const [commandProgress, setCommandProgress] = useState(0);
-
-  useEffect(() => {
-    setCommandProgress(0);
-  }, [status]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (logBufferRef.current) {
-         const clean = logBufferRef.current.replace(/\x1b\[[0-9;]*m/g, '').trim();
-         if (clean) {
-            const lines = clean.split('\n');
-            let lastLine = lines[lines.length - 1].trim();
-            if (!lastLine && lines.length > 1) lastLine = lines[lines.length - 2].trim();
-            if (lastLine) setLogLine(lastLine.substring(0, 60));
-         }
-         logBufferRef.current = '';
-      }
-    }, 150);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedFiles(files), 1000);
-    return () => clearTimeout(timer);
+  // List all available HTML files for tab selection
+  const htmlFiles = useMemo(() => {
+    return files.filter(f => f.path.endsWith('.html'));
   }, [files]);
 
+  // Determine the actual path to render
+  const currentHtmlPath = useMemo(() => {
+    const exists = htmlFiles.some(f => f.path === selectedHtmlPath);
+    if (exists) return selectedHtmlPath;
+    
+    // Fallback: index.html or the first available html file
+    const indexFile = htmlFiles.find(f => f.path === 'index.html');
+    return indexFile ? 'index.html' : (htmlFiles[0]?.path || 'index.html');
+  }, [htmlFiles, selectedHtmlPath]);
+
+  // Sync virtual address display in parent editor bar
   useEffect(() => {
-    if (url && onUrlChange) {
-      onUrlChange(url);
+    if (onUrlChange) {
+      onUrlChange(`sandbox://authority/${currentHtmlPath}`);
     }
-  }, [url, onUrlChange]);
+  }, [onUrlChange, currentHtmlPath]);
 
-  // Terminal initialization removed as per user request
-
+  // Listen to navigation events from the sandboxed iframe
   useEffect(() => {
-    if (restartKey > 0 && webcontainerInstance && activeProcessObj) {
-      const restart = async () => {
-        try {
-          setStatus('starting');
-          activeProcessObj.kill();
-          if (xtermRef.current) xtermRef.current.write('\r\n\x1b[1;33m▶\x1b[0m Restarting dev server (npm run dev)...\r\n');
-          
-          activeProcessObj = await webcontainerInstance!.spawn('npm', ['run', 'dev']);
-          activeProcessObj.output.pipeTo(new WritableStream({
-             write(data) { 
-               if (xtermRef.current) xtermRef.current.write(data); 
-             }
-          }));
-          setStatus('ready');
-        } catch(e) {
-          console.error(e);
-        }
-      };
-      restart();
-    }
-  }, [restartKey]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function initAndRun() {
-      if (debouncedFiles.length === 0) return;
-
-      try {
-        if (!webcontainerInstance) {
-          setStatus('booting');
-          if (!bootingPromise) {
-             bootingPromise = WebContainer.boot();
-          }
-          webcontainerInstance = await bootingPromise;
-          
-          webcontainerInstance.on('server-ready', (port, url) => {
-            currentAppUrl = url;
-            setUrl(url);
-            setStatus('ready');
-          });
-        }
-
-        if (!mounted) return;
-
-        setStatus(prev => prev === 'ready' ? 'ready' : 'mounting');
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NAVIGATE') {
+        const rawPath = event.data.path;
         
-        const filesMap: Record<string, string> = {};
-        for (const file of debouncedFiles) {
-          const cleanPath = file.path.startsWith('/') ? file.path.substring(1) : file.path;
-          filesMap[cleanPath] = file.content;
+        // Clean simple directory resolution
+        const parts = currentHtmlPath.split('/');
+        parts.pop(); // remove file name
+        
+        const targetParts = rawPath.replace(/^\.?\//, '').split('/');
+        const finalParts = [...parts];
+        for (const p of targetParts) {
+          if (p === '..') {
+            finalParts.pop();
+          } else if (p !== '.' && p !== '') {
+            finalParts.push(p);
+          }
+        }
+        
+        let path = finalParts.join('/');
+        if (!path.endsWith('.html') && !path.includes('.')) {
+          path = path ? `${path}.html` : 'index.html';
         }
 
-        if (!isDevServerRunning) {
-          // Initial sync of all files
-          if (xtermRef.current) {
-             xtermRef.current.write('\x1b[36mSyncing files...\x1b[0m\r\n');
-          }
-          const tree = buildFileSystemTree(debouncedFiles);
-          await webcontainerInstance.mount(tree);
-          previousFilesContent = filesMap;
+        const matched = files.find(f => f.path === path || f.path === `${path}/index.html`);
+        if (matched) {
+          setSelectedHtmlPath(matched.path);
         } else {
-          // Write only changed files
-          for (const [path, content] of Object.entries(filesMap)) {
-             if (previousFilesContent[path] !== content) {
-                try {
-                  const parts = path.split('/');
-                  const fileName = parts.pop()!;
-                  if (parts.length > 0) {
-                     await webcontainerInstance.fs.mkdir(parts.join('/'), { recursive: true });
-                  }
-                  await webcontainerInstance.fs.writeFile(path, content);
-                } catch(e) {
-                   // Ignore write failures gracefully
-                }
-                previousFilesContent[path] = content;
-             }
-          }
-          
-          // Remove deleted files
-          for (const path of Object.keys(previousFilesContent)) {
-             if (!(path in filesMap)) {
-                try {
-                   await webcontainerInstance.fs.rm(path);
-                } catch(e) {}
-                delete previousFilesContent[path];
-             }
+          // Simple suffix matching
+          const fallback = files.find(f => f.path.endsWith(path));
+          if (fallback) {
+            setSelectedHtmlPath(fallback.path);
           }
         }
-
-        const handleLog = (data: string) => {
-          if (xtermRef.current) {
-            xtermRef.current.write(data);
-          }
-          logBufferRef.current += data;
-          setCommandProgress((prev: number) => {
-             const newProg = prev + (100 - prev) * 0.05;
-             return newProg > 99 ? 99 : newProg;
-          });
-        };
-
-        if (!isDevServerRunning) {
-          isDevServerRunning = true;
-          
-          // Install dependencies
-          setStatus('installing');
-          if (xtermRef.current) xtermRef.current.write('\r\n\x1b[1;33m▶\x1b[0m npm install\r\n');
-          
-          const installProcess = await webcontainerInstance.spawn('npm', ['install']);
-          installProcess.output.pipeTo(new WritableStream({
-            write(data) { handleLog(data); }
-          }));
-          
-          const installExitCode = await installProcess.exit;
-          if (installExitCode !== 0) {
-             isDevServerRunning = false;
-             throw new Error('Installation failed');
-          }
-
-          setStatus('starting');
-          if (xtermRef.current) xtermRef.current.write('\r\n\x1b[1;33m▶\x1b[0m npm run dev\r\n');
-          
-          activeProcessObj = await webcontainerInstance.spawn('npm', ['run', 'dev']);
-          activeProcessObj.output.pipeTo(new WritableStream({
-             write(data) { handleLog(data); }
-          }));
-        } else if (currentAppUrl) {
-          setStatus('ready');
-          setUrl(currentAppUrl);
-        }
-
-      } catch (err: any) {
-        setStatus('error');
-        if (xtermRef.current) xtermRef.current.write(`\r\n\x1b[31;1mError: ${err.message}\x1b[0m\r\n`);
       }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [files, currentHtmlPath]);
+
+  // Compile active page content with resource injection
+  const htmlContent = useMemo(() => {
+    if (files.length === 0) return '';
+
+    const activeFile = files.find(f => f.path === currentHtmlPath);
+    if (!activeFile) return '';
+
+    let content = activeFile.content;
+
+    // 1. Surgical injection of relative stylesheet file contents
+    const linkRegex = /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["'][^>]*>/gi;
+    content = content.replace(linkRegex, (match, href) => {
+      const cleanHref = href.replace(/^\.?\//, '');
+      const cssFile = files.find(f => f.path.replace(/^\.?\//, '') === cleanHref);
+      if (cssFile) {
+        return `<style>\n${cssFile.content}\n</style>`;
+      }
+      return match;
+    });
+
+    // 2. Surgical injection of relative script file contents
+    const scriptRegex = /<script[^>]+src=["']([^"']+)["'][^>]*>\s*<\/script>/gi;
+    content = content.replace(scriptRegex, (match, src) => {
+      const cleanSrc = src.replace(/^\.?\//, '');
+      const jsFile = files.find(f => f.path.replace(/^\.?\//, '') === cleanSrc);
+      if (jsFile) {
+        return `<script>\n${jsFile.content}\n</script>`;
+      }
+      return match;
+    });
+
+    // 3. Inject micro-routing interception script
+    const injectRouterScript = `
+<script id="preview-navigation-interceptor">
+document.addEventListener('click', function(e) {
+  const link = e.target.closest('a');
+  if (link) {
+    const href = link.getAttribute('href');
+    if (href && !href.startsWith('http:') && !href.startsWith('https:') && !href.startsWith('#') && !href.startsWith('javascript:') && !href.startsWith('data:')) {
+      e.preventDefault();
+      window.parent.postMessage({ type: 'NAVIGATE', path: href }, '*');
+    }
+  }
+});
+</script>
+`;
+    // Append routing script before closing body tag
+    if (content.includes('</body>')) {
+      content = content.replace('</body>', `${injectRouterScript}\n</body>`);
+    } else {
+      content = content + injectRouterScript;
     }
 
-    initAndRun();
-
-    return () => {
-      mounted = false;
-    };
-  }, [debouncedFiles]);
+    return content;
+  }, [files, currentHtmlPath]);
 
   if (files.length === 0) {
     return (
-      <div className="flex-1 bg-white flex items-center justify-center text-zinc-500">
+      <div className="flex-1 bg-[#0a0a0a] flex items-center justify-center text-zinc-500">
         <div className="text-center">
-          <Play className="w-12 h-12 mx-auto mb-4 text-zinc-300" />
-          <p>Generate an app to see the preview.</p>
+          <Play className="w-12 h-12 mx-auto mb-4 text-[#404044]" />
+          <p className="text-sm">Generate an app to see the preview.</p>
         </div>
       </div>
     );
   }
 
-  if (status === 'error') {
-     return (
-       <div className="flex-1 bg-[#1e1e1e] flex flex-col items-center justify-center p-6 text-red-400">
-          <div className="max-w-xl w-full bg-red-950/30 border border-red-900 rounded-lg p-4">
-             <h3 className="font-semibold mb-2 flex items-center gap-2"><Terminal className="w-4 h-4"/> Error occurred</h3>
-             <div className="space-y-1 text-sm font-mono mt-4">
-                 Please check the terminal logs or try reloading the application.
-             </div>
-          </div>
-       </div>
-     );
-  }
-
-  if (status !== 'ready' || !url) {
-    const progressMap: Record<string, number> = {
-      idle: 0,
-      booting: 20,
-      mounting: 40,
-      installing: 40 + (commandProgress * 0.40),
-      starting: 80 + (commandProgress * 0.15),
-      ready: 100,
-      error: 100
-    };
-    const progress = progressMap[status] || 0;
-
+  if (!htmlContent) {
     return (
-      <div className="flex-1 bg-white flex flex-col items-center justify-center p-6 text-zinc-800">
-        <Loader2 className="w-8 h-8 animate-spin mb-4 text-zinc-400" />
-        <h3 className="text-xl font-medium mb-6">Building your preview</h3>
-        
-        <div className="w-64 h-1 bg-zinc-200 rounded-full overflow-hidden mb-3">
-           <div 
-             className="h-full bg-zinc-900 transition-all duration-300 ease-out"
-             style={{ width: `${progress}%` }}
-           />
+      <div className="flex-1 bg-[#0a0a0a] flex flex-col items-center justify-center p-6 text-zinc-400">
+        <div className="max-w-xl w-full bg-[#111113] border border-zinc-800 rounded-lg p-6">
+          <h3 className="font-semibold mb-2 flex items-center gap-2 text-white">
+            <ShieldAlert className="w-5 h-5 text-zinc-500" />
+            No active file found
+          </h3>
+          <p className="text-sm text-zinc-400 mt-2">
+            Workspace lacks an appropriate <code>.html</code> rendering entrypoint.
+          </p>
         </div>
-
-        <p className="text-sm font-medium text-zinc-600">
-           {status === 'booting' && 'Starting environment...'}
-           {status === 'mounting' && 'Syncing files...'}
-           {status === 'installing' && 'Installing dependencies...'}
-           {status === 'starting' && 'Starting development server...'}
-           {status === 'idle' && 'Preparing...'}
-        </p>
-        
-        {(status === 'installing' || status === 'starting') && logLine && (
-           <p className="text-xs text-zinc-400 mt-2 font-mono truncate max-w-sm" title={logLine}>
-             {logLine}
-           </p>
-        )}
       </div>
     );
   }
 
   return (
-    <div className="flex-1 bg-white relative w-full h-full">
-      <iframe 
+    <div className="flex-1 bg-[#0a0a0a] relative w-full h-full flex flex-col">
+      {/* Dynamic Sub-Page Navigation Tab Bar */}
+      {htmlFiles.length > 1 && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#111113] border-b border-zinc-800 overflow-x-auto scrollbar-hide">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500 mr-2 font-semibold">Pages:</span>
+          {htmlFiles.map(f => (
+            <button
+              key={f.path}
+              onClick={() => setSelectedHtmlPath(f.path)}
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-xs transition-colors ${
+                currentHtmlPath === f.path
+                  ? 'bg-[#1e1e20] text-white border border-zinc-700/50'
+                  : 'bg-transparent text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <FileCode2 className="w-3 h-3 text-zinc-500" />
+              {f.path}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Main sandboxed viewframe */}
+      <iframe
         key={previewKey}
-        ref={previewIframeRef}
-        src={url}
+        srcDoc={htmlContent}
         className="w-full h-full border-0 bg-white"
         title="App Preview"
-        allow="cross-origin-isolated"
+        sandbox="allow-scripts allow-same-origin allow-modals allow-forms"
       />
     </div>
   );
